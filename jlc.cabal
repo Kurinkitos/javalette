@@ -9,9 +9,9 @@ version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/jlc#readme>
 homepage:       https://github.com/githubuser/jlc#readme
 bug-reports:    https://github.com/githubuser/jlc/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2023 Author name here
+author:         Lilly Jinstrand
+maintainer:     lilly.jinstrand@gmail.com
+copyright:      2023 Lilly Jinstrand
 license:        BSD3
 build-type:     Simple
 extra-source-files:
@@ -23,6 +23,13 @@ source-repository head
 
 library
   exposed-modules:
+      Javalette.Abs
+      Javalette.ErrM
+      Javalette.Lex
+      Javalette.Par
+      Javalette.Print
+      Javalette.Skel
+      Javalette.Test
       Lib
   other-modules:
       Paths_jlc
@@ -30,7 +37,8 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      array >=0.5.4.0
+    , base >=4.7 && <5
   default-language: Haskell2010
 
 executable jlc-exe
@@ -41,7 +49,8 @@ executable jlc-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array >=0.5.4.0
+    , base >=4.7 && <5
     , jlc
   default-language: Haskell2010
 
@@ -54,6 +63,7 @@ test-suite jlc-test
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array >=0.5.4.0
+    , base >=4.7 && <5
     , jlc
   default-language: Haskell2010

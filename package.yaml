@@ -2,9 +2,9 @@ name:                jlc
 version:             0.1.0.0
 github:              "githubuser/jlc"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2023 Author name here"
+author:              "Lilly Jinstrand"
+maintainer:          "lilly.jinstrand@gmail.com"
+copyright:           "2023 Lilly Jinstrand"
 
 extra-source-files:
 - README.md
@@ -20,6 +20,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- array >= 0.5.4.0
 
 ghc-options:
 - -Wall
