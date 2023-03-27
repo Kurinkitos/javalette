@@ -8,21 +8,27 @@ HAPPY_OPTS = --array --info --ghc --coerce
 ALEX       = alex
 ALEX_OPTS  = --ghc
 
+SUB_PATH   = $(shell stack path --local-install-root)
+
 # List of goals not corresponding to file names.
 
 .PHONY : all clean distclean compiler
 
 # Default goal.
 
-all : Javalette/Test compiler
+all : compiler
 
 compiler : 
 	stack build
+	cp $(SUB_PATH)/bin/jlc-exe jlc
 
+
+test : compiler
+	./runtest.sh .
 # Rules for building the parser.
 
-Javalette/Abs.hs Javalette/Lex.x Javalette/Par.y Javalette/Print.hs Javalette/Test.hs : src/Javalette.cf
-	bnfc --haskell -d src/Javalette.cf
+src/Javalette/Abs.hs src/Javalette/Lex.x src/Javalette/Par.y src/Javalette/Print.hs src/Javalette/Test.hs : src/Javalette.cf
+	bnfc --haskell -d Javalette.cf
 
 %.hs : %.y
 	${HAPPY} ${HAPPY_OPTS} $<
@@ -30,16 +36,16 @@ Javalette/Abs.hs Javalette/Lex.x Javalette/Par.y Javalette/Print.hs Javalette/Te
 %.hs : %.x
 	${ALEX} ${ALEX_OPTS} $<
 
-Javalette/Test : Javalette/Abs.hs Javalette/Lex.hs Javalette/Par.hs Javalette/Print.hs Javalette/Test.hs
+src/Javalette/Test : src/Javalette/Abs.hs src/Javalette/Lex.hs src/Javalette/Par.hs src/Javalette/Print.hs src/Javalette/Test.hs
 	${GHC} ${GHC_OPTS} $@
 
 # Rules for cleaning generated files.
 
 clean :
-	-rm -f Javalette/*.hi Javalette/*.o Javalette/*.log Javalette/*.aux Javalette/*.dvi
+	-rm -f src/Javalette/*.hi src/Javalette/*.o src/Javalette/*.log src/Javalette/*.aux src/Javalette/*.dvi
 
 distclean : clean
-	-rm -f Javalette/Abs.hs Javalette/Abs.hs.bak Javalette/ComposOp.hs Javalette/ComposOp.hs.bak Javalette/Doc.txt Javalette/Doc.txt.bak Javalette/ErrM.hs Javalette/ErrM.hs.bak Javalette/Layout.hs Javalette/Layout.hs.bak Javalette/Lex.x Javalette/Lex.x.bak Javalette/Par.y Javalette/Par.y.bak Javalette/Print.hs Javalette/Print.hs.bak Javalette/Skel.hs Javalette/Skel.hs.bak Javalette/Test.hs Javalette/Test.hs.bak Javalette/XML.hs Javalette/XML.hs.bak Javalette/AST.agda Javalette/AST.agda.bak Javalette/Parser.agda Javalette/Parser.agda.bak Javalette/IOLib.agda Javalette/IOLib.agda.bak Javalette/Main.agda Javalette/Main.agda.bak Javalette/Javalette.dtd Javalette/Javalette.dtd.bak Javalette/Test Javalette/Lex.hs Javalette/Par.hs Javalette/Par.info Javalette/ParData.hs Makefile
-	-rmdir -p Javalette/
+	-rm -f src/Javalette/Abs.hs src/Javalette/Abs.hs.bak src/Javalette/ComposOp.hs src/Javalette/ComposOp.hs.bak src/Javalette/Doc.txt src/Javalette/Doc.txt.bak src/Javalette/ErrM.hs src/Javalette/ErrM.hs.bak src/Javalette/Layout.hs src/Javalette/Layout.hs.bak src/Javalette/Lex.x src/Javalette/Lex.x.bak src/Javalette/Par.y src/Javalette/Par.y.bak src/Javalette/Print.hs src/Javalette/Print.hs.bak src/Javalette/Skel.hs src/Javalette/Skel.hs.bak src/Javalette/Test.hs src/Javalette/Test.hs.bak src/Javalette/XML.hs src/Javalette/XML.hs.bak src/Javalette/AST.agda src/Javalette/AST.agda.bak src/Javalette/Parser.agda src/Javalette/Parser.agda.bak src/Javalette/IOLib.agda src/Javalette/IOLib.agda.bak src/Javalette/Main.agda src/Javalette/Main.agda.bak src/Javalette/src/Javalette.dtd src/Javalette/src/Javalette.dtd.bak src/Javalette/Test src/Javalette/Lex.hs src/Javalette/Par.hs src/Javalette/Par.info src/Javalette/ParData.hs Makefile
+	-rmdir -p src/Javalette/
 
 # EOF
