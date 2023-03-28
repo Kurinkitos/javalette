@@ -13,6 +13,8 @@ import Javalette.Par   ( pProg, myLexer )
 import Javalette.Print ( Print, printTree )
 import Javalette.Skel  ()
 
+import Typecheck ()
+
 
 
 compileProgram :: String -> Int -> IO ()
