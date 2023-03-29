@@ -44,7 +44,8 @@ data Type = Int | Doub | Bool | Void | Fun Type [Type]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Expr
-    = EVar Ident
+    = ETyped Type Expr
+    | EVar Ident
     | ELitInt Integer
     | ELitDoub Double
     | ELitTrue

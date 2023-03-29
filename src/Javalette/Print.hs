@@ -210,6 +210,7 @@ instance Print [Javalette.Abs.Type] where
 
 instance Print Javalette.Abs.Expr where
   prt i = \case
+    Javalette.Abs.ETyped type_ expr -> prPrec i 7 (concatD [prt 0 type_, doc (showString "::"), prt 6 expr])
     Javalette.Abs.EVar id_ -> prPrec i 6 (concatD [prt 0 id_])
     Javalette.Abs.ELitInt n -> prPrec i 6 (concatD [prt 0 n])
     Javalette.Abs.ELitDoub d -> prPrec i 6 (concatD [prt 0 d])

@@ -5,7 +5,8 @@ import Lib
 main :: IO ()
 main = do
   program_src <- getContents
-  compileProgram program_src 2
+  --compileProgram program_src 2
+  compileProgram hello_world 2
 
 hello_world :: String
 hello_world = "// Hello world program\n\

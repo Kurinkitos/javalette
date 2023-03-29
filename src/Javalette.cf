@@ -64,6 +64,9 @@ separator  Type "," ;
 
 -- Expressions ---------------------------------------------
 
+-- Typed expression to be used in typechecking, not part of the language
+ETyped.    Expr7 ::= Type "::" Expr6;
+
 EVar.      Expr6 ::= Ident ;
 
 ELitInt.   Expr6 ::= Integer ;
@@ -92,7 +95,7 @@ EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 6 ;
+coercions  Expr 7 ;
 
 separator  Expr "," ;
 

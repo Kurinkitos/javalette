@@ -36,26 +36,27 @@ import Javalette.Lex
   '-'       { PT _ (TS _ 11) }
   '--'      { PT _ (TS _ 12) }
   '/'       { PT _ (TS _ 13) }
-  ';'       { PT _ (TS _ 14) }
-  '<'       { PT _ (TS _ 15) }
-  '<='      { PT _ (TS _ 16) }
-  '='       { PT _ (TS _ 17) }
-  '=='      { PT _ (TS _ 18) }
-  '>'       { PT _ (TS _ 19) }
-  '>='      { PT _ (TS _ 20) }
-  'boolean' { PT _ (TS _ 21) }
-  'double'  { PT _ (TS _ 22) }
-  'else'    { PT _ (TS _ 23) }
-  'false'   { PT _ (TS _ 24) }
-  'if'      { PT _ (TS _ 25) }
-  'int'     { PT _ (TS _ 26) }
-  'return'  { PT _ (TS _ 27) }
-  'true'    { PT _ (TS _ 28) }
-  'void'    { PT _ (TS _ 29) }
-  'while'   { PT _ (TS _ 30) }
-  '{'       { PT _ (TS _ 31) }
-  '||'      { PT _ (TS _ 32) }
-  '}'       { PT _ (TS _ 33) }
+  '::'      { PT _ (TS _ 14) }
+  ';'       { PT _ (TS _ 15) }
+  '<'       { PT _ (TS _ 16) }
+  '<='      { PT _ (TS _ 17) }
+  '='       { PT _ (TS _ 18) }
+  '=='      { PT _ (TS _ 19) }
+  '>'       { PT _ (TS _ 20) }
+  '>='      { PT _ (TS _ 21) }
+  'boolean' { PT _ (TS _ 22) }
+  'double'  { PT _ (TS _ 23) }
+  'else'    { PT _ (TS _ 24) }
+  'false'   { PT _ (TS _ 25) }
+  'if'      { PT _ (TS _ 26) }
+  'int'     { PT _ (TS _ 27) }
+  'return'  { PT _ (TS _ 28) }
+  'true'    { PT _ (TS _ 29) }
+  'void'    { PT _ (TS _ 30) }
+  'while'   { PT _ (TS _ 31) }
+  '{'       { PT _ (TS _ 32) }
+  '||'      { PT _ (TS _ 33) }
+  '}'       { PT _ (TS _ 34) }
   L_Ident   { PT _ (TV $$)   }
   L_doubl   { PT _ (TD $$)   }
   L_integ   { PT _ (TI $$)   }
@@ -136,6 +137,11 @@ ListType
   | Type { (:[]) $1 }
   | Type ',' ListType { (:) $1 $3 }
 
+Expr7 :: { Javalette.Abs.Expr }
+Expr7
+  : Type '::' Expr6 { Javalette.Abs.ETyped $1 $3 }
+  | '(' Expr ')' { $2 }
+
 Expr6 :: { Javalette.Abs.Expr }
 Expr6
   : Ident { Javalette.Abs.EVar $1 }
@@ -145,7 +151,7 @@ Expr6
   | 'false' { Javalette.Abs.ELitFalse }
   | Ident '(' ListExpr ')' { Javalette.Abs.EApp $1 $3 }
   | String { Javalette.Abs.EString $1 }
-  | '(' Expr ')' { $2 }
+  | Expr7 { $1 }
 
 Expr5 :: { Javalette.Abs.Expr }
 Expr5

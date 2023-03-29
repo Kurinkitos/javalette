@@ -65,6 +65,7 @@ transType x = case x of
 
 transExpr :: Javalette.Abs.Expr -> Result
 transExpr x = case x of
+  Javalette.Abs.ETyped type_ expr -> failure x
   Javalette.Abs.EVar ident -> failure x
   Javalette.Abs.ELitInt integer -> failure x
   Javalette.Abs.ELitDoub double -> failure x

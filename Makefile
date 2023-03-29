@@ -18,7 +18,9 @@ SUB_PATH   = $(shell stack path --local-install-root)
 
 all : compiler
 
-compiler : 
+# Actually depends on all the bnfc generated files but since they are all made the same way 
+# it is enough to depend on one file
+compiler : src/Javalette/Abs.hs
 	stack build
 	cp $(SUB_PATH)/bin/jlc-exe jlc
 
@@ -27,8 +29,9 @@ test : compiler
 	./runtest.sh .
 # Rules for building the parser.
 
+# sed hack since bnfc gives the generated tester an invalid name
 src/Javalette/Abs.hs src/Javalette/Lex.x src/Javalette/Par.y src/Javalette/Print.hs src/Javalette/Test.hs : src/Javalette.cf
-	bnfc --haskell -d Javalette.cf
+	cd src; bnfc --haskell -d Javalette.cf; sed -i 's/Main/Javalette.Test/' Javalette/Test.hs
 
 %.hs : %.y
 	${HAPPY} ${HAPPY_OPTS} $<
