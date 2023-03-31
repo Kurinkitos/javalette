@@ -43,7 +43,7 @@ library
     , base >=4.7 && <5
     , containers >=0.5
     , mtl >=2.2
-    , transformers >=0.6.1
+    , transformers >=0.6.1.0
   default-language: Haskell2010
 
 executable jlc-exe
@@ -60,7 +60,7 @@ executable jlc-exe
     , containers >=0.5
     , jlc
     , mtl >=2.2
-    , transformers >=0.6.1
+    , transformers >=0.6.1.0
   default-language: Haskell2010
 
 test-suite jlc-test
@@ -78,5 +78,5 @@ test-suite jlc-test
     , containers >=0.5
     , jlc
     , mtl >=2.2
-    , transformers >=0.6.1
+    , transformers >=0.6.1.0
   default-language: Haskell2010

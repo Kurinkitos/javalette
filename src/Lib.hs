@@ -23,11 +23,13 @@ compileProgram program v =
     Left err -> do
       hPutStrLn stderr "ERROR"
       putStrLn err
+      exitFailure
     Right ast -> 
       case typecheck ast of
         Left err -> do
           hPutStrLn stderr "ERROR"
           putStrLn err
+          exitFailure
         Right prog -> do
           hPutStrLn stderr "OK"
           putStrLn "\nParse Successful!"

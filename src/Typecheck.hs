@@ -9,7 +9,7 @@ import Data.List.Unique
 import Control.Monad
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
-import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, )
+import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, tryE)
 import Data.Either (lefts, rights)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
@@ -17,7 +17,6 @@ data FunctionSig = FunctionSig Type [Type]
 type SymbolsRWS = RWS (Map.Map Ident FunctionSig) () [Map.Map Ident Type]
 type TCExceptRWS = ExceptT String SymbolsRWS
 
--- Built in functions, expect printString which is handleded specially
 
 typecheck :: Prog -> Either String Prog
 typecheck (Program [])     = Left "No function definitions found"
@@ -196,8 +195,11 @@ typecheckExpression eType (EAdd e1 op e2) = do
     checkedE2 <- typecheckExpression eType e2
     return $ ETyped eType $ EAdd checkedE1 op checkedE2
 -- Since the types of e1 and e2 are not known yet, have to try both int and double
-typecheckExpression Bool (ERel e1 op e2) = undefined
-
+typecheckExpression Bool (ERel e1 op e2) = do
+    t <- inferType e1
+    checkedExp1 <- typecheckExpression t e1
+    checkedExp2 <- typecheckExpression t e2
+    return $ ETyped Bool (ERel checkedExp1 op checkedExp2)
 typecheckExpression eType (ERel {}) = throwE $ show eType ++ " expected, found bool"
 typecheckExpression Bool (EAnd e1 e2) = do
     checkedE1 <- typecheckExpression Bool e1
@@ -210,7 +212,18 @@ typecheckExpression Bool (EOr e1 e2) = do
     return $ ETyped Bool $ EOr checkedE1 checkedE2
 typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
 
+inferType :: Expr -> TCExceptRWS Type
+inferType expr = do
+    res <- mapM checkExpr types
+    case rights res of
+        [] -> throwE $ "INTERNAL ERROR: No type matches that of expression " ++ show expr
+        [ETyped t _] -> return t
+        _ -> throwE $ "INTERNAL ERROR: Failed to infer type of expression " ++ show expr
+    where
+        checkExpr t = tryE $ typecheckExpression t expr
 
+types :: [Type]
+types = [Int, Doub, Bool, Void]
 
 checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
 -- printString needs special handeling since String is not a type in Javalette
