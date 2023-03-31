@@ -23,6 +23,7 @@ dependencies:
 - array >= 0.5.4.0
 - containers >= 0.5
 - mtl >= 2.2
+- transformers >= 0.6.1
 - Unique >= 0.4.7.9
 
 ghc-options:

@@ -6,14 +6,18 @@ import Javalette.Abs
 
 import qualified Data.Map.Lazy as Map
 import Data.List.Unique
-import Control.Monad.RWS
-import Control.Monad.Except
+import Control.Monad
+import Control.Monad.Trans ( MonadTrans(lift) )
+import Control.Monad.Trans.RWS
+import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, )
 import Data.Either (lefts, rights)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
 data FunctionSig = FunctionSig Type [Type]
 type SymbolsRWS = RWS (Map.Map Ident FunctionSig) () [Map.Map Ident Type]
-type TCExcept = ExceptT String
+type TCExceptRWS = ExceptT String SymbolsRWS
+
+-- Built in functions, expect printString which is handleded specially
 
 typecheck :: Prog -> Either String Prog
 typecheck (Program [])     = Left "No function definitions found"
@@ -39,9 +43,16 @@ initFunctionSigs (Program defs) = case repeated fidents of
         [] -> Right (Map.fromList fsigs)
         (ident:_) -> Left ("Function " ++ show ident ++ " defined multiple times")
     where
-        fsigs = initSymbols' defs
+        fsigs = primitiveFunctions ++ initSymbols' defs
         fidents = map fst fsigs
 
+primitiveFunctions :: [(Ident, FunctionSig)]
+primitiveFunctions = [
+    (Ident "printInt", FunctionSig Void [Int]),
+    (Ident "printDouble", FunctionSig Void [Doub]),
+    (Ident "readInt", FunctionSig Int []),
+    (Ident "readDouble", FunctionSig Doub [])
+    ]
 
 initSymbols' :: [TopDef] -> [(Ident, FunctionSig)]
 initSymbols' []     = []
@@ -55,14 +66,14 @@ argToType (Argument t _) = t
 
 -- I'm checking that the function returns separate from the main pass. 
 -- It's a lot slower but simplifies the functions
-typecheckFunction :: TopDef -> TCExcept SymbolsRWS TopDef
+typecheckFunction :: TopDef -> TCExceptRWS TopDef
 typecheckFunction topdef@(FnDef Void _id _args _blk) = typecheckFunction' topdef
 typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsReturn stms
     then typecheckFunction' topdef
-    else throwError "Function is not guaranteed to return a value"
+    else throwE "Function is not guaranteed to return a value"
 
 
-typecheckFunction' :: TopDef -> TCExcept SymbolsRWS TopDef
+typecheckFunction' :: TopDef -> TCExceptRWS TopDef
 typecheckFunction' (FnDef retType ident args (Block stms)) = do
     FnDef retType ident args . Block <$> checkedStms
     where
@@ -72,7 +83,7 @@ typecheckFunction' (FnDef retType ident args (Block stms)) = do
 
 
 
-typecheckStatement :: Type -> Stmt -> TCExcept SymbolsRWS Stmt
+typecheckStatement :: Type -> Stmt -> TCExceptRWS Stmt
 typecheckStatement _ Empty = return Empty
 typecheckStatement retType (BStmt (Block stms)) = do
     checkedStms <- mapM (typecheckStatement retType) stms
@@ -88,21 +99,21 @@ typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
         Int -> return (Incr ident)
-        vt -> throwError $ "Can only increment variables of type Int, found type" ++ show vt
+        vt -> throwE $ "Can only increment variables of type Int, found type" ++ show vt
 typecheckStatement _ (Decr ident) = do
     vType <- lookupVariable ident
     case vType of
         Int -> return (Incr ident)
-        vt -> throwError $ "Can only decrement variables of type Int, found type" ++ show vt
+        vt -> throwE $ "Can only decrement variables of type Int, found type" ++ show vt
 typecheckStatement rType (Ret expr) = do
     checkedExpr <- typecheckExpression rType expr
     return (Ret checkedExpr)
 typecheckStatement rType VRet = case rType of
     Void -> return VRet
-    _ -> throwError "Return without expression in non void function"
+    _ -> throwE "Return without expression in non void function"
 typecheckStatement rType (Cond expr stm) = do
     checkedExpr <- typecheckExpression Bool expr
-    checkedStm <- typecheckStatement rType stm 
+    checkedStm <- typecheckStatement rType stm
     return (Cond checkedExpr checkedStm)
 typecheckStatement rType (CondElse expr stm1 stm2) = do
     checkedExpr <- typecheckExpression Bool expr
@@ -118,8 +129,8 @@ typecheckStatement _ (SExp expr) = do
     return (SExp checkedExpr)
 
 
-typecheckDeclaration :: Type -> Item -> TCExcept SymbolsRWS Item
-typecheckDeclaration Void _ = throwError "Can't declare a variable of type void"
+typecheckDeclaration :: Type -> Item -> TCExceptRWS Item
+typecheckDeclaration Void _ = throwE "Can't declare a variable of type void"
 typecheckDeclaration dType (NoInit ident) = do
     typecheckDeclaration' dType ident
     return (NoInit ident)
@@ -127,51 +138,100 @@ typecheckDeclaration dType (Init ident expr) = do
     checkedExp <- typecheckExpression dType expr
     return (Init ident checkedExp)
 
-typecheckDeclaration' :: Type -> Ident -> TCExcept SymbolsRWS ()
+typecheckDeclaration' :: Type -> Ident -> TCExceptRWS ()
 typecheckDeclaration' dType ident = do
-    cstate <- get
+    cstate <- lift get
     -- head is fine here since there is always at least one map TODO: Refactor with NonEmpty
     let scope = head cstate
     case Map.lookup ident scope of
-        Just _ -> throwError ("Variable " ++ show ident ++ " defined multiple times in the same scope")
+        Just _ -> throwE ("Variable " ++ show ident ++ " defined multiple times in the same scope")
         Nothing -> do
             let new_scope = Map.insert ident dType scope
-            put (new_scope: tail cstate)
+            lift $ put (new_scope: tail cstate)
 
-typecheckExpression :: Type -> Expr -> TCExcept SymbolsRWS Expr
-typecheckExpression _ (ETyped _ _) = throwError "INTERNAL ERROR: ETyped encountred while typechecking, meaning the typechecker has traversed this tree before"
+typecheckExpression :: Type -> Expr -> TCExceptRWS Expr
+typecheckExpression _ (ETyped _ _) = throwE "INTERNAL ERROR: ETyped encountred while typechecking, meaning the typechecker has traversed this tree before"
 typecheckExpression eType e@(EVar ident) = do
     vType <- lookupVariable ident
     if vType == eType then
         return $ ETyped eType e
     else
-        throwError $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
+        throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
 typecheckExpression Int e@(ELitInt _) = return $ ETyped Int e
-typecheckExpression eType (ELitInt _) = throwError $ "Int expected, found: " ++ show eType
+typecheckExpression eType (ELitInt _) = throwE $ "Int expected, found: " ++ show eType
 
 typecheckExpression Doub e@(ELitDoub _) = return $ ETyped Doub e
-typecheckExpression eType (ELitDoub _) = throwError $ "Double expected, found: " ++ show eType
+typecheckExpression eType (ELitDoub _) = throwE $ "Double expected, found: " ++ show eType
 
 typecheckExpression Bool ELitTrue = return $ ETyped Bool ELitTrue
-typecheckExpression eType ELitTrue = throwError $ "Boolean expected, found: " ++ show eType
+typecheckExpression eType ELitTrue = throwE $ "Boolean expected, found: " ++ show eType
 typecheckExpression Bool ELitFalse = return $ ETyped Bool ELitFalse
-typecheckExpression eType ELitFalse = throwError $ "Boolean expected, found: " ++ show eType
+typecheckExpression eType ELitFalse = throwE $ "Boolean expected, found: " ++ show eType
+typecheckExpression eType (EApp ident args) = do
+    checkedArgs <- checkFunCall eType ident args
+    return $ ETyped eType $ EApp ident checkedArgs
+-- String literals are handeled separatly so we never get here
+typecheckExpression _ (EString _) = throwE "INTERNAL ERROR: String in general expression"
+typecheckExpression eType (Neg subex) = do
+    checkedSubex <- typecheckExpression eType subex
+    return $ ETyped eType checkedSubex
+typecheckExpression Bool (Not subex) = do
+    checkedSubex <- typecheckExpression Bool subex
+    return $ ETyped Bool checkedSubex
+typecheckExpression eType (Not _) = throwE $ "Boolean expected, found: " ++ show eType
+-- Special case for Mod since it is only defined for Ints
+typecheckExpression Int (EMul e1 Mod e2) = do
+    checkedE1 <- typecheckExpression Int e1
+    checkedE2 <- typecheckExpression Int e2
+    return $ ETyped Int $ EMul checkedE1 Mod checkedE2
+typecheckExpression eType (EMul _ Mod _) = throwE $ "Integer expected, found " ++ show eType
+typecheckExpression Bool (EMul {}) = throwE "Multiplication not defined for Bool"
+typecheckExpression eType (EMul e1 op e2) = do
+    checkedE1 <- typecheckExpression eType e1
+    checkedE2 <- typecheckExpression eType e2
+    return $ ETyped eType $ EMul checkedE1 op checkedE2
+typecheckExpression Bool (EAdd {}) = throwE "Addition not defined for Bool"
+typecheckExpression eType (EAdd e1 op e2) = do
+    checkedE1 <- typecheckExpression eType e1
+    checkedE2 <- typecheckExpression eType e2
+    return $ ETyped eType $ EAdd checkedE1 op checkedE2
+-- Since the types of e1 and e2 are not known yet, have to try both int and double
+typecheckExpression Bool (ERel e1 op e2) = undefined
 
-typecheckExpression ex_type expr = return (ETyped ex_type expr)
+typecheckExpression eType (ERel {}) = throwE $ show eType ++ " expected, found bool"
+typecheckExpression Bool (EAnd e1 e2) = do
+    checkedE1 <- typecheckExpression Bool e1
+    checkedE2 <- typecheckExpression Bool e2
+    return $ ETyped Bool $ EAnd checkedE1 checkedE2
+typecheckExpression eType (EAnd _ _) = throwE $ "And is defined for bools, not " ++ show eType
+typecheckExpression Bool (EOr e1 e2) = do
+    checkedE1 <- typecheckExpression Bool e1
+    checkedE2 <- typecheckExpression Bool e2
+    return $ ETyped Bool $ EOr checkedE1 checkedE2
+typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
 
-checkFunCall :: Ident -> [Expr] -> TCExcept SymbolsRWS [Expr]
-checkFunCall fIdent args = do
+
+
+checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
+-- printString needs special handeling since String is not a type in Javalette
+checkFunCall Void (Ident "printString") expr@[EString _] = return expr
+checkFunCall _ (Ident "printString") _ = throwE "printString called wrong"
+checkFunCall eType fIdent args = do
     (FunctionSig rType argTypes) <- getFunSig fIdent
     if length args /= length argTypes then
-        throwError $ "Function " ++ show fIdent ++ " called with " ++ show (length args) ++ " when it takes " ++ show (length argTypes)
+        throwE $ "Function " ++ show fIdent ++ " called with " ++ show (length args) ++ " when it takes " ++ show (length argTypes)
     else
-        undefined
+        if eType /= rType then
+            throwE $ show eType ++ " expected, but " ++ show fIdent ++ " returns " ++ show rType
+        else
+            zipWithM typecheckExpression argTypes args
 
-getFunSig :: Ident -> TCExcept SymbolsRWS FunctionSig
+
+getFunSig :: Ident -> TCExceptRWS FunctionSig
 getFunSig fIdent = do
-    sigs <- ask
+    sigs <- lift ask
     case Map.lookup fIdent sigs of
-        Nothing -> throwError ("Call to undeclared function " ++ show fIdent)
+        Nothing -> throwE ("Call to undeclared function " ++ show fIdent)
         Just fsig -> return fsig
 
 -- Checks if all paths of a program return. Notably does not check type of the return or for situations like
@@ -185,11 +245,11 @@ allPathsReturn ((CondElse _ stm1 stm2):ss) = bothReturns || allPathsReturn ss
 allPathsReturn (_:ss) = allPathsReturn ss
 
 
-lookupVariable :: Ident -> TCExcept SymbolsRWS Type
+lookupVariable :: Ident -> TCExceptRWS Type
 lookupVariable ident = do
-    cstate <- get
+    cstate <- lift get
     case lookupVariable' ident cstate of
-        Nothing -> throwError ("Use of undeclared variable " ++ show ident)
+        Nothing -> throwE ("Use of undeclared variable " ++ show ident)
         Just vType -> return vType
 
 

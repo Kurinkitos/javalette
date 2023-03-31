@@ -1,16 +1,12 @@
 module Main (main) where
 
 import Lib
+import System.IO
 
 main :: IO ()
 main = do
-  program_src <- getContents
-  --compileProgram program_src 2
-  compileProgram hello_world 2
-
-hello_world :: String
-hello_world = "// Hello world program\n\
-\int main () {\n\
-\  printString(\"Hello world!\") ;\n\
-\  return 0 ;\n\
-\}"
+  --program_src <- getContents
+  handle <- openFile "/home/lilly/tda283/tester/testsuite/good/core010.jl" ReadMode
+  program_src <- hGetContents handle
+  compileProgram program_src 2
+  hClose handle
