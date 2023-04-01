@@ -11,7 +11,6 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, tryE)
 import Data.Either (lefts, rights)
-import Debug.Trace (traceM)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
 data FunctionSig = FunctionSig Type [Type]
@@ -40,9 +39,13 @@ functionArgTypes' ((Argument t ident):as) = (ident, t) : functionArgTypes' as
 
 initFunctionSigs :: Prog -> Either String (Map.Map Ident FunctionSig)
 initFunctionSigs (Program defs) = case repeated fidents of
-        [] -> Right (Map.fromList fsigs)
+        [] -> case Map.lookup (Ident "main") funs of
+            Nothing -> Left "No main function!"
+            Just (FunctionSig Int []) -> Right funs
+            Just _ -> Left "Main function has wrong signature!"
         (ident:_) -> Left ("Function " ++ show ident ++ " defined multiple times")
     where
+        funs = Map.fromList fsigs
         fsigs = primitiveFunctions ++ initSymbols' defs
         fidents = map fst fsigs
 
@@ -74,8 +77,11 @@ typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsRe
 
 
 typecheckFunction' :: TopDef -> TCExceptRWS TopDef
-typecheckFunction' (FnDef retType ident args blk@(Block stms)) = do
-    FnDef retType ident args . Block <$> checkedStms
+typecheckFunction' (FnDef retType ident args (Block stms)) = do
+    if Void `elem` map argToType args then
+            throwE "Void is not allowed as a argument type"
+        else
+            FnDef retType ident args . Block <$> checkedStms
     where
         checkedStms = mapM (typecheckStatement retType) stms
 
@@ -90,6 +96,8 @@ typecheckStatement retType (BStmt (Block stms)) = do
     old_state <- lift get
     lift $ put $ Map.empty:old_state
     checkedStms <- mapM (typecheckStatement retType) stms
+    -- Restore old state
+    lift $ put old_state
     return (BStmt (Block checkedStms))
 typecheckStatement _ (Decl vType decls) = do
     checkedDeclarations <- mapM (typecheckDeclaration vType) decls
@@ -260,6 +268,7 @@ allPathsReturn ((Ret _):_) = True
 allPathsReturn ((CondElse _ stm1 stm2):ss) = bothReturns || allPathsReturn ss
     where
         bothReturns = allPathsReturn [stm1] && allPathsReturn [stm2]
+allPathsReturn ((BStmt (Block bstms)):ss) = allPathsReturn bstms || allPathsReturn ss
 allPathsReturn (_:ss) = allPathsReturn ss
 
 

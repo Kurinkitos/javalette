@@ -2,14 +2,12 @@ module Lib
     ( compileProgram
     ) where
 
-import Javalette.Par ( myLexer, pProg )
+import Javalette.Par ( myLexer, pProg, pProg, myLexer )
 import System.Exit        ( exitFailure )
-import Control.Monad      ( when, foldM )
+import Control.Monad      ( when)
 import System.IO (hPutStrLn, stderr)
 
-import Javalette.Abs   ( Prog )
 import Javalette.Lex   ( Token, mkPosToken )
-import Javalette.Par   ( pProg, myLexer )
 import Javalette.Print ( Print, printTree )
 import Javalette.Skel  ()
 
@@ -18,13 +16,13 @@ import Typecheck ( typecheck)
 
 
 compileProgram :: String -> Int -> IO ()
-compileProgram program v = 
+compileProgram program v =
   case pProg (myLexer program) of
     Left err -> do
       hPutStrLn stderr "ERROR"
       putStrLn err
       exitFailure
-    Right ast -> 
+    Right ast ->
       case typecheck ast of
         Left err -> do
           hPutStrLn stderr "ERROR"
@@ -36,6 +34,7 @@ compileProgram program v =
 
 
 
+-- Debug functions
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
