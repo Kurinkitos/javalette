@@ -11,6 +11,7 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, tryE)
 import Data.Either (lefts, rights)
+import Debug.Trace (traceM)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
 data FunctionSig = FunctionSig Type [Type]
@@ -73,7 +74,7 @@ typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsRe
 
 
 typecheckFunction' :: TopDef -> TCExceptRWS TopDef
-typecheckFunction' (FnDef retType ident args (Block stms)) = do
+typecheckFunction' (FnDef retType ident args blk@(Block stms)) = do
     FnDef retType ident args . Block <$> checkedStms
     where
         checkedStms = mapM (typecheckStatement retType) stms
@@ -85,6 +86,9 @@ typecheckFunction' (FnDef retType ident args (Block stms)) = do
 typecheckStatement :: Type -> Stmt -> TCExceptRWS Stmt
 typecheckStatement _ Empty = return Empty
 typecheckStatement retType (BStmt (Block stms)) = do
+    -- Add a new layer to the variable stack to allow shadowing
+    old_state <- lift get
+    lift $ put $ Map.empty:old_state
     checkedStms <- mapM (typecheckStatement retType) stms
     return (BStmt (Block checkedStms))
 typecheckStatement _ (Decl vType decls) = do
@@ -135,6 +139,7 @@ typecheckDeclaration dType (NoInit ident) = do
     return (NoInit ident)
 typecheckDeclaration dType (Init ident expr) = do
     checkedExp <- typecheckExpression dType expr
+    typecheckDeclaration' dType ident
     return (Init ident checkedExp)
 
 typecheckDeclaration' :: Type -> Ident -> TCExceptRWS ()
