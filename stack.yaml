@@ -43,6 +43,7 @@ extra-deps:
   - Unique-0.4.7.9
   - transformers-0.6.1.0
   - mtl-2.3.1
+  - ./llvm-hs-pure
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

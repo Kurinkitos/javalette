@@ -12,6 +12,7 @@ import Javalette.Print ( Print, printTree )
 import Javalette.Skel  ()
 
 import Typecheck ( typecheck)
+import Javalette.Abs (Prog)
 
 
 
