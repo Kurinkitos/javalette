@@ -10,7 +10,7 @@ import Data.List.Unique
 import Control.Monad
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
-import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, tryE)
+import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
 import Data.Either (lefts, rights)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
@@ -237,6 +237,10 @@ inferType expr = do
         _ -> throwE $ "INTERNAL ERROR: Failed to infer type of expression " ++ show expr
     where
         checkExpr t = tryE $ typecheckExpression t expr
+
+-- Backport of tryE since it is not in this version of transformers
+tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
+tryE m = catchE (liftM Right m) (return . Left)
 
 types :: [Type]
 types = [Int, Doub, Bool, Void]

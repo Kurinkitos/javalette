@@ -23,10 +23,10 @@ dependencies:
 - array >= 0.5.4.0
 - containers >= 0.5
 - mtl >= 2.2
-- transformers >= 0.6.1.0
+- transformers >= 0.5.1.0
 - Unique >= 0.4.7.9
-- llvm-hs-pure >= 0.9.0.0
-#- llvm-hs-pretty >= 0.9.0.0
+- llvm-hs-pure >= 9.0.0
+- llvm-hs-pretty >= 0.9.0.0
 
 ghc-options:
 - -Wall
