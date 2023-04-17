@@ -1,5 +1,6 @@
 module Typecheck (
-        typecheck
+        typecheck,
+        FunctionSig
     ) where
 
 import Javalette.Abs
@@ -14,18 +15,20 @@ import Data.Either (lefts, rights)
 
 -- The list of maps represents variables, forming a stack to permitt shadowing
 data FunctionSig = FunctionSig Type [Type]
+    deriving Show
 type SymbolsRWS = RWS (Map.Map Ident FunctionSig) () [Map.Map Ident Type]
 type TCExceptRWS = ExceptT String SymbolsRWS
 
 
-typecheck :: Prog -> Either String Prog
+typecheck :: Prog -> Either String (Prog, Map.Map Ident FunctionSig)
 typecheck (Program [])     = Left "No function definitions found"
 typecheck prog@(Program topdefs) = case initFunctionSigs prog of
     Left err -> Left err
     Right fsigs -> case lefts checkedFuns of
-        []  -> Right (Program (rights checkedFuns))
+        []  -> Right (Program (rights checkedFuns), fsigsWithoutPrimitives)
         ers -> Left (unlines ers)
         where
+            fsigsWithoutPrimitives = Map.difference fsigs $ Map.fromList primitiveFunctions
             checkedFuns = map (fst . checkFun) topdefs
             checkFun td = evalRWS (runExceptT (typecheckFunction td)) fsigs [functionArgTypes td]
 

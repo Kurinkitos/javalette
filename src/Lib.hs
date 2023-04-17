@@ -11,8 +11,10 @@ import Javalette.Lex   ( Token, mkPosToken )
 import Javalette.Print ( Print, printTree )
 import Javalette.Skel  ()
 
-import Typecheck ( typecheck)
-import Javalette.Abs (Prog)
+import Typecheck ( typecheck, FunctionSig)
+import Javalette.Abs (Prog, Ident)
+import LLVMBackend (compile)
+import qualified Data.Map as Map
 
 
 
@@ -29,11 +31,15 @@ compileProgram program v =
           hPutStrLn stderr "ERROR"
           putStrLn err
           exitFailure
-        Right prog -> do
+        Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
           putStrLn "\nParse Successful!"
+          compileProgram' prog fsigs
 
-
+compileProgram' :: Prog -> Map.Map Ident FunctionSig -> IO ()
+compileProgram' program fsigs = do
+  let llvm_ir = compile program fsigs
+  putStrLn llvm_ir
 
 -- Debug functions
 type Err        = Either String
