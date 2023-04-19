@@ -23,23 +23,24 @@ compileProgram program v =
   case pProg (myLexer program) of
     Left err -> do
       hPutStrLn stderr "ERROR"
-      putStrLn err
+      hPutStrLn stderr err
       exitFailure
     Right ast ->
       case typecheck ast of
         Left err -> do
           hPutStrLn stderr "ERROR"
-          putStrLn err
+          hPutStrLn stderr err
           exitFailure
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
-          putStrLn "\nParse Successful!"
+          hPutStrLn stderr "\nParse Successful!"
+          showTree 2 prog
           compileProgram' prog fsigs
 
 compileProgram' :: Prog -> Map.Map Ident FunctionSig -> IO ()
 compileProgram' program fsigs = do
   let llvm_ir = compile program fsigs
-  putStrLn llvm_ir
+  putStr llvm_ir
 
 -- Debug functions
 type Err        = Either String
