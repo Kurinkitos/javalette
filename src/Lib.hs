@@ -33,8 +33,8 @@ compileProgram program v =
           exitFailure
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
-          hPutStrLn stderr "\nParse Successful!"
-          showTree 2 prog
+          --hPutStrLn stderr "\nParse Successful!"
+          showTree v prog
           compileProgram' prog fsigs
 
 compileProgram' :: Prog -> Map.Map Ident FunctionSig -> IO ()
@@ -48,7 +48,7 @@ type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
 
 putStrV :: Verbosity -> String -> IO ()
-putStrV v s = when (v > 1) $ putStrLn s
+putStrV v s = when (v > 1) $ hPutStrLn stderr s
 
 run :: (Print a, Show a) => Verbosity -> ParseFun a -> String -> IO ()
 run v p s =

@@ -1,6 +1,6 @@
 module Typecheck (
         typecheck,
-        FunctionSig
+        FunctionSig (FunctionSig)
     ) where
 
 import Javalette.Abs
@@ -189,10 +189,10 @@ typecheckExpression eType (EApp ident args) = do
 typecheckExpression _ (EString _) = throwE "INTERNAL ERROR: String in general expression"
 typecheckExpression eType (Neg subex) = do
     checkedSubex <- typecheckExpression eType subex
-    return $ ETyped eType checkedSubex
+    return $ ETyped eType (Neg checkedSubex)
 typecheckExpression Bool (Not subex) = do
     checkedSubex <- typecheckExpression Bool subex
-    return $ ETyped Bool checkedSubex
+    return $ ETyped Bool (Not checkedSubex)
 typecheckExpression eType (Not _) = throwE $ "Boolean expected, found: " ++ show eType
 -- Special case for Mod since it is only defined for Ints
 typecheckExpression Int (EMul e1 Mod e2) = do
