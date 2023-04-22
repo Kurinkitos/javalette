@@ -4,7 +4,7 @@ import Lib
 import System.IO
 
 debug :: Bool
-debug = True
+debug = False
 
 main :: IO ()
 main = do

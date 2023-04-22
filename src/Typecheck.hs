@@ -83,8 +83,11 @@ typecheckFunction' :: TopDef -> TCExceptRWS TopDef
 typecheckFunction' (FnDef retType ident args (Block stms)) = do
     if Void `elem` map argToType args then
             throwE "Void is not allowed as a argument type"
-        else
-            FnDef retType ident args . Block <$> checkedStms
+        else do
+            s <- checkedStms
+            case s of  -- Handle the special case of an empty void function with implicit return
+              [] -> return $ FnDef retType ident args (Block [VRet])
+              cstms@(_:_) -> return $ FnDef retType ident args (Block cstms)
     where
         checkedStms = mapM (typecheckStatement retType) stms
 
