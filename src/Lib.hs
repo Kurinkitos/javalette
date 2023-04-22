@@ -33,7 +33,6 @@ compileProgram program v =
           exitFailure
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
-          --hPutStrLn stderr "\nParse Successful!"
           showTree v prog
           compileProgram' prog fsigs
 

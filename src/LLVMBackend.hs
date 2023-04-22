@@ -18,6 +18,8 @@ import LLVM.AST.AddrSpace
 
 import LLVM.Pretty
 
+import Data.Hashable
+
 import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
 import LLVM.IRBuilder.Instruction
@@ -78,7 +80,11 @@ cgFun fsigs (FnDef retType fIdent fnArgs (Block stms)) = mdo
     where
         fnBody o = mdo
             _unit <- evalRWST (cgFnBody stms fnArgs o) fsigs [Map.empty]
-            return ()
+            isTerminated <- hasTerminator 
+            if isTerminated then
+                return ()
+            else mdo
+                unreachable 
 
 
 
@@ -92,9 +98,19 @@ cgFnBody stms idents oprs = mdo
     _ <- mapM cgStm stms
     return ()
 
-pushArguments :: [(Ident, Operand)] -> CgMonad ()
-pushArguments arg = mdo 
-    put [Map.fromList arg]
+pushArguments :: [(Arg, Operand)] -> CgMonad ()
+pushArguments arg = mdo
+    ops <- mapM pushArgument arg
+    put [Map.fromList (Prelude.zip idents ops)]
+    where
+        idents = map (argToIdent . fst) arg
+-- Allocates a new variable and copies the argument to it. This is needed to allow overwriting function arguments
+pushArgument :: (Arg, Operand) -> CgMonad Operand
+pushArgument (Argument aType _ident, op)= mdo
+    aOp <- alloca (encodeType aType) Nothing 1
+    store aOp 0 op
+    return aOp
+
 
 
 cgDecl :: Javalette.Abs.Type -> Item -> CgMonad ()
@@ -127,8 +143,16 @@ cgStm (Ass ident expr) = mdo
     vOp <- lookupVar ident
     exprOp <- cgExpr expr
     store vOp 0 exprOp
-cgStm (Incr ident) = undefined
-cgStm (Decr ident) = undefined
+cgStm (Incr ident) = mdo
+    vOp <- lookupVar ident
+    vVal <- load vOp 0
+    vInc <- add vVal (ConstantOperand (C.Int 32 1))
+    store vOp 0 vInc
+cgStm (Decr ident) = mdo
+    vOp <- lookupVar ident
+    vVal <- load vOp 0
+    vInc <- add vVal (ConstantOperand (C.Int 32 (-1)))
+    store vOp 0 vInc
 cgStm (Javalette.Abs.Ret expr) = mdo
     rOp <- cgExpr expr
     ret rOp
@@ -151,9 +175,18 @@ cgStm (CondElse expr tStms fStms) = mdo
     fBlock <- block `named` "false"
     cgStm fStms
     br eBlock
-    eBlock <- block `named` "end" 
+    eBlock <- block `named` "end"
     return ()
-cgStm (While expr stms) = undefined
+cgStm (While expr stms) = mdo
+    br condL
+    condL <- block `named` "condition"
+    condOp <- cgExpr expr
+    condBr condOp loopBody endL
+    loopBody <- block `named` "loopBody"
+    cgStm stms
+    br condL
+    endL <- block `named` "endL"
+    return ()
 cgStm (SExp expr) = mdo
     _ <- cgExpr expr
     return ()
@@ -161,7 +194,7 @@ cgStm (SExp expr) = mdo
 cgExpr :: Expr -> CgMonad Operand
 cgExpr (ETyped eType expr) = case expr of
     ETyped _ iexpr -> error "Malformed AST! Nested Etyped"
-    EVar ident -> mdo 
+    EVar ident -> mdo
         varPtr <- lookupVar ident
         load varPtr 0
     ELitInt i -> return $ ConstantOperand (C.Int 32 i)
@@ -172,16 +205,17 @@ cgExpr (ETyped eType expr) = case expr of
         fOps <- mapM cgExpr exprs
         fPtr <- lookupFunction fIdent
         call fPtr (encodeFunOperands fOps)
-    EString str -> mdo
-        strptr <- globalStringPtr str (mkName str)
-        return $ ConstantOperand strptr
+    EString str -> mdo -- String literals is handled in a special case since it is not a type
+        error "Unreachable!"
     Neg sexpr -> mdo
         expOp <- cgExpr sexpr
         case eType of
           Int -> mul expOp (ConstantOperand (C.Int 32 (-1)))
           Doub -> fmul expOp (ConstantOperand (C.Float (F.Double (-1.0))))
           _ -> error "Malformed AST! Trying to negate non number"
-    Not sexpr -> undefined
+    Not sexpr -> mdo
+        sexpOp <- cgExpr sexpr
+        select sexpOp (ConstantOperand (C.Int 1 0)) (ConstantOperand (C.Int 1 1))
     EMul expr1 mulop expr2 -> mdo
         expOp1 <- cgExpr expr1
         expOp2 <- cgExpr expr2
@@ -204,9 +238,9 @@ cgExpr (ETyped eType expr) = case expr of
             _ -> case addop of
               Plus -> add expOp1 expOp2
               Minus -> sub expOp1 expOp2
-    ERel expr1 relop expr2 -> case eType of
+    ERel expr1 relop expr2 -> case expr1 of
     -- Doubles need a float comp instruction
-      Doub -> mdo
+      ETyped Doub _sExp1 -> mdo
         expOp1 <- cgExpr expr1
         expOp2 <- cgExpr expr2
         fcmp (encodeFRelOp relop) expOp1 expOp2
@@ -214,10 +248,43 @@ cgExpr (ETyped eType expr) = case expr of
         expOp1 <- cgExpr expr1
         expOp2 <- cgExpr expr2
         icmp (encodeIRelOp relop) expOp1 expOp2
-    EAnd expr1 expr2 -> undefined
-    EOr expr1 expr2 -> undefined
+    EAnd expr1 expr2 -> mdo
+        -- To make shortcutting work properly, and to describe it using the irbuilder there is gonna be some ugly stack storage here
+        -- llvm-opt does remove all of it so it is not really a problem
+        res_ptr <- alloca (encodeType Bool) Nothing 0
+        expr1Op <- cgExpr expr1
+        condBr expr1Op e1True falseL
+        e1True <- block `named` "e1True"
+        expr2Op <- cgExpr expr2
+        condBr expr2Op trueL falseL
+        trueL <- block `named` "trueL"
+        store res_ptr 0 (ConstantOperand (C.Int 1 1)) 
+        br endL
+        falseL <- block `named` "falseL"
+        store res_ptr 0 (ConstantOperand (C.Int 1 0))
+        br endL 
+        endL <- block `named` "end"
+        load res_ptr 0
+    EOr expr1 expr2 -> mdo
+        -- Same deal here as with and, but with reversed logic
+        res_ptr <- alloca (encodeType Bool) Nothing 0
+        expr1Op <- cgExpr expr1
+        condBr expr1Op e1False trueL
+        e1False <- block `named` "e1False" 
+        expr2Op <- cgExpr expr2
+        condBr expr2Op trueL falseL
+        trueL <- block `named` "trueL"
+        store res_ptr 0 (ConstantOperand (C.Int 1 1)) 
+        br endL
+        falseL <- block `named` "falseL"
+        store res_ptr 0 (ConstantOperand (C.Int 1 0))
+        br endL 
+        endL <- block `named` "end"
+        load res_ptr 0
 cgExpr (EString str) = mdo
-    strptr <- globalStringPtr str (mkName str)
+    let str_hash = BSS.toShort $ BSC.pack $ show $ hash str
+    strName <- freshName str_hash
+    strptr <- globalStringPtr str strName
     return $ ConstantOperand strptr
 cgExpr expr = error $ "Malformed AST! Expected eType, found " ++ show expr
 

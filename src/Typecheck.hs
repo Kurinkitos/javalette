@@ -117,7 +117,7 @@ typecheckStatement _ (Incr ident) = do
 typecheckStatement _ (Decr ident) = do
     vType <- lookupVariable ident
     case vType of
-        Int -> return (Incr ident)
+        Int -> return (Decr ident)
         vt -> throwE $ "Can only decrement variables of type Int, found type" ++ show vt
 typecheckStatement rType (Ret expr) = do
     checkedExpr <- typecheckExpression rType expr
