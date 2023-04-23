@@ -13,7 +13,7 @@ import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
 import Data.Either (lefts, rights)
 
--- The list of maps represents variables, forming a stack to permitt shadowing
+-- The list of maps represents variables, forming a stack to permit shadowing
 data FunctionSig = FunctionSig Type [Type]
     deriving Show
 type SymbolsRWS = RWS (Map.Map Ident FunctionSig) () [Map.Map Ident Type]
