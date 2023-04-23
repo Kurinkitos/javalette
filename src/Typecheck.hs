@@ -73,7 +73,9 @@ argToType (Argument t _) = t
 -- I'm checking that the function returns separate from the main pass. 
 -- It's a lot slower but simplifies the functions
 typecheckFunction :: TopDef -> TCExceptRWS TopDef
-typecheckFunction topdef@(FnDef Void _id _args _blk) = typecheckFunction' topdef
+typecheckFunction topdef@(FnDef Void _id _args _blk) = do
+    fixedTopdef <- implicitReturn topdef
+    typecheckFunction' fixedTopdef
 typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsReturn stms
     then typecheckFunction' topdef
     else throwE "Function is not guaranteed to return a value"
@@ -83,14 +85,15 @@ typecheckFunction' :: TopDef -> TCExceptRWS TopDef
 typecheckFunction' (FnDef retType ident args (Block stms)) = do
     if Void `elem` map argToType args then
             throwE "Void is not allowed as a argument type"
-        else do
-            s <- checkedStms
-            case s of  -- Handle the special case of an empty void function with implicit return
-              [] -> return $ FnDef retType ident args (Block [VRet])
-              cstms@(_:_) -> return $ FnDef retType ident args (Block cstms)
+        else 
+            FnDef retType ident args . Block <$> checkedStms
     where
         checkedStms = mapM (typecheckStatement retType) stms
 
+-- Make implicit returns explicit
+implicitReturn :: TopDef -> TCExceptRWS TopDef
+implicitReturn (FnDef Void fid args (Block stms)) = return $ FnDef Void fid args (Block (stms ++ [VRet]))
+implicitReturn _ = throwE "Only void functions can have implicit return"
 
 
 

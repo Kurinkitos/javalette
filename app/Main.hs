@@ -9,7 +9,8 @@ debug = False
 main :: IO ()
 main = do
   if debug then do
-    handle <- openFile "/home/lilly/tda283/tester/testsuite/good/core020.jl" ReadMode
+    handle <- openFile "/home/lilly/tda283/tester/testsuite/good/core017.jl" ReadMode
+    --handle <- openFile "small.jl" ReadMode
     program_src <- hGetContents handle
     compileProgram program_src 2
     hClose handle

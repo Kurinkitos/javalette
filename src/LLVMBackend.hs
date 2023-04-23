@@ -115,11 +115,16 @@ pushArgument (Argument aType _ident, op)= mdo
 
 cgDecl :: Javalette.Abs.Type -> Item -> CgMonad ()
 cgDecl vType (NoInit ident) = mdo
-    _vOp <- cgDecl' vType ident
-    return ()
-cgDecl vType (Init ident expr) = mdo
     vOp <- cgDecl' vType ident
+    -- Default values for variables
+    case vType of 
+      Int -> store vOp 0 (ConstantOperand (C.Int 32 0))
+      Doub -> store vOp 0 (ConstantOperand (C.Float (F.Double 0.0)))
+      Bool -> store vOp 0 (ConstantOperand (C.Int 1 0))
+      _ -> error "Malformed AST! Variable of dissalowed type"
+cgDecl vType (Init ident expr) = mdo
     exprOp <- cgExpr expr
+    vOp <- cgDecl' vType ident
     store vOp 0 exprOp
 
 cgDecl' :: Javalette.Abs.Type -> Ident -> CgMonad Operand
@@ -162,7 +167,13 @@ cgStm (Cond expr stms) = mdo
     condBr expOp tBlock fBlock
     tBlock <- block `named` "true"
     cgStm stms
-    br fBlock
+    -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
+    isTerminated <- hasTerminator 
+    if isTerminated then mdo
+        _unreachBlock <- block `named` "unreachable"
+        unreachable 
+    else mdo
+        br fBlock
     fBlock <- block `named` "false"
     return ()
 
@@ -171,10 +182,22 @@ cgStm (CondElse expr tStms fStms) = mdo
     condBr expOp tBlock fBlock
     tBlock <- block `named` "true"
     cgStm tStms
-    br eBlock
+    -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
+    isTerminated <- hasTerminator 
+    if isTerminated then mdo
+        _unreachBlock <- block `named` "unreachable"
+        unreachable 
+    else mdo
+        br eBlock
     fBlock <- block `named` "false"
     cgStm fStms
-    br eBlock
+    -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
+    isTerminated2 <- hasTerminator 
+    if isTerminated2 then mdo
+        _unreachBlock <- block `named` "unreachable"
+        unreachable 
+    else mdo
+        br eBlock
     eBlock <- block `named` "end"
     return ()
 cgStm (While expr stms) = mdo
@@ -184,7 +207,12 @@ cgStm (While expr stms) = mdo
     condBr condOp loopBody endL
     loopBody <- block `named` "loopBody"
     cgStm stms
-    br condL
+    isTerminated <- hasTerminator 
+    if isTerminated then mdo
+        _unreachBlock <- block `named` "unreachable"
+        unreachable 
+    else mdo
+        br condL
     endL <- block `named` "endL"
     return ()
 cgStm (SExp expr) = mdo
@@ -269,7 +297,7 @@ cgExpr (ETyped eType expr) = case expr of
         -- Same deal here as with and, but with reversed logic
         res_ptr <- alloca (encodeType Bool) Nothing 0
         expr1Op <- cgExpr expr1
-        condBr expr1Op e1False trueL
+        condBr expr1Op trueL e1False
         e1False <- block `named` "e1False" 
         expr2Op <- cgExpr expr2
         condBr expr2Op trueL falseL
