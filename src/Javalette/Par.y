@@ -37,30 +37,32 @@ import Javalette.Lex
   '--'      { PT _ (TS _ 12) }
   '.'       { PT _ (TS _ 13) }
   '/'       { PT _ (TS _ 14) }
-  ';'       { PT _ (TS _ 15) }
-  '<'       { PT _ (TS _ 16) }
-  '<='      { PT _ (TS _ 17) }
-  '='       { PT _ (TS _ 18) }
-  '=='      { PT _ (TS _ 19) }
-  '>'       { PT _ (TS _ 20) }
-  '>='      { PT _ (TS _ 21) }
-  '['       { PT _ (TS _ 22) }
-  ']'       { PT _ (TS _ 23) }
-  'boolean' { PT _ (TS _ 24) }
-  'double'  { PT _ (TS _ 25) }
-  'else'    { PT _ (TS _ 26) }
-  'false'   { PT _ (TS _ 27) }
-  'if'      { PT _ (TS _ 28) }
-  'int'     { PT _ (TS _ 29) }
-  'length'  { PT _ (TS _ 30) }
-  'new'     { PT _ (TS _ 31) }
-  'return'  { PT _ (TS _ 32) }
-  'true'    { PT _ (TS _ 33) }
-  'void'    { PT _ (TS _ 34) }
-  'while'   { PT _ (TS _ 35) }
-  '{'       { PT _ (TS _ 36) }
-  '||'      { PT _ (TS _ 37) }
-  '}'       { PT _ (TS _ 38) }
+  ':'       { PT _ (TS _ 15) }
+  ';'       { PT _ (TS _ 16) }
+  '<'       { PT _ (TS _ 17) }
+  '<='      { PT _ (TS _ 18) }
+  '='       { PT _ (TS _ 19) }
+  '=='      { PT _ (TS _ 20) }
+  '>'       { PT _ (TS _ 21) }
+  '>='      { PT _ (TS _ 22) }
+  '['       { PT _ (TS _ 23) }
+  ']'       { PT _ (TS _ 24) }
+  'boolean' { PT _ (TS _ 25) }
+  'double'  { PT _ (TS _ 26) }
+  'else'    { PT _ (TS _ 27) }
+  'false'   { PT _ (TS _ 28) }
+  'for'     { PT _ (TS _ 29) }
+  'if'      { PT _ (TS _ 30) }
+  'int'     { PT _ (TS _ 31) }
+  'length'  { PT _ (TS _ 32) }
+  'new'     { PT _ (TS _ 33) }
+  'return'  { PT _ (TS _ 34) }
+  'true'    { PT _ (TS _ 35) }
+  'void'    { PT _ (TS _ 36) }
+  'while'   { PT _ (TS _ 37) }
+  '{'       { PT _ (TS _ 38) }
+  '||'      { PT _ (TS _ 39) }
+  '}'       { PT _ (TS _ 40) }
   L_Ident   { PT _ (TV $$)   }
   L_doubl   { PT _ (TD $$)   }
   L_integ   { PT _ (TI $$)   }
@@ -118,6 +120,7 @@ Stmt
   | 'if' '(' Expr ')' Stmt { Javalette.Abs.Cond $3 $5 }
   | 'if' '(' Expr ')' Stmt 'else' Stmt { Javalette.Abs.CondElse $3 $5 $7 }
   | 'while' '(' Expr ')' Stmt { Javalette.Abs.While $3 $5 }
+  | 'for' '(' Type Ident ':' Expr ')' Stmt { Javalette.Abs.For $3 $4 $6 $8 }
   | Expr ';' { Javalette.Abs.SExp $1 }
 
 Item :: { Javalette.Abs.Item }

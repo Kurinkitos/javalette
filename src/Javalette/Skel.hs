@@ -48,6 +48,7 @@ transStmt x = case x of
   Javalette.Abs.Cond expr stmt -> failure x
   Javalette.Abs.CondElse expr stmt1 stmt2 -> failure x
   Javalette.Abs.While expr stmt -> failure x
+  Javalette.Abs.For type_ ident expr stmt -> failure x
   Javalette.Abs.SExp expr -> failure x
 
 transItem :: Javalette.Abs.Item -> Result
