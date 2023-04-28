@@ -114,7 +114,7 @@ pushArgument (Argument aType _ident, op)= mdo
 
 
 cgDecl :: Javalette.Abs.Type -> Item -> CgMonad ()
-cgDecl vType (NoInit ident) = mdo
+cgDecl vType (NoInitVar ident) = mdo
     vOp <- cgDecl' vType ident
     -- Default values for variables
     case vType of 
@@ -144,7 +144,7 @@ cgStm (BStmt (Block stms)) = mdo
 cgStm (Decl vType decls) = mdo
     _ <- mapM (cgDecl vType) decls
     return ()
-cgStm (Ass ident expr) = mdo
+cgStm (Ass (LIdent ident) expr) = mdo
     vOp <- lookupVar ident
     exprOp <- cgExpr expr
     store vOp 0 exprOp

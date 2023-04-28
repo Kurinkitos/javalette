@@ -37,16 +37,17 @@ The set of reserved words is the set of terminals appearing in the grammar. Thos
 
 The reserved words used in Javalette are the following:
   | ``boolean`` | ``double`` | ``else`` | ``false``
-  | ``if`` | ``int`` | ``return`` | ``true``
-  | ``void`` | ``while`` |  |
+  | ``if`` | ``int`` | ``length`` | ``new``
+  | ``return`` | ``true`` | ``void`` | ``while``
 
 The symbols used in Javalette are the following:
   | ( | ) | , | {
-  | } | ; | = | ++
-  | -- | :: | - | !
-  | && | || | + | *
-  | / | % | < | <=
-  | > | >= | == | !=
+  | } | ; | [ | ]
+  | = | ++ | -- | .
+  | - | ! | && | ||
+  | + | * | / | %
+  | < | <= | > | >=
+  | == | != |  |
 
 ===Comments===
 Single-line comments begin with #, //.Multiple-line comments are  enclosed with /* and */.
@@ -71,7 +72,7 @@ All other symbols are terminals.
   | //Stmt// | -> | ``;``
   |  |  **|**  | //Blk//
   |  |  **|**  | //Type// //[Item]// ``;``
-  |  |  **|**  | //Ident// ``=`` //Expr// ``;``
+  |  |  **|**  | //LVal// ``=`` //Expr// ``;``
   |  |  **|**  | //Ident// ``++`` ``;``
   |  |  **|**  | //Ident// ``--`` ``;``
   |  |  **|**  | ``return`` //Expr// ``;``
@@ -81,19 +82,25 @@ All other symbols are terminals.
   |  |  **|**  | ``while`` ``(`` //Expr// ``)`` //Stmt//
   |  |  **|**  | //Expr// ``;``
   | //Item// | -> | //Ident//
+  |  |  **|**  | //Ident// ``[`` ``]``
   |  |  **|**  | //Ident// ``=`` //Expr//
   | //[Item]// | -> | //Item//
   |  |  **|**  | //Item// ``,`` //[Item]//
-  | //Type// | -> | ``int``
+  | //LVal// | -> | //Ident//
+  |  |  **|**  | //Ident// ``[`` //Expr6// ``]``
+  | //Type// | -> | //Type// ``[`` ``]``
+  |  |  **|**  | ``int``
   |  |  **|**  | ``double``
   |  |  **|**  | ``boolean``
   |  |  **|**  | ``void``
   | //[Type]// | -> | **eps**
   |  |  **|**  | //Type//
   |  |  **|**  | //Type// ``,`` //[Type]//
-  | //Expr7// | -> | //Type// ``::`` //Expr6//
-  |  |  **|**  | ``(`` //Expr// ``)``
-  | //Expr6// | -> | //Ident//
+  | //Expr7// | -> | ``new`` //Type// ``[`` //Expr6// ``]``
+  |  |  **|**  | //Ident// ``[`` //Expr6// ``]``
+  |  |  **|**  | //Expr8//
+  | //Expr6// | -> | //Ident// ``.`` ``length``
+  |  |  **|**  | //Ident//
   |  |  **|**  | //Integer//
   |  |  **|**  | //Double//
   |  |  **|**  | ``true``
@@ -101,8 +108,8 @@ All other symbols are terminals.
   |  |  **|**  | //Ident// ``(`` //[Expr]// ``)``
   |  |  **|**  | //String//
   |  |  **|**  | //Expr7//
-  | //Expr5// | -> | ``-`` //Expr6//
-  |  |  **|**  | ``!`` //Expr6//
+  | //Expr5// | -> | ``-`` //Expr7//
+  |  |  **|**  | ``!`` //Expr7//
   |  |  **|**  | //Expr6//
   | //Expr4// | -> | //Expr4// //MulOp// //Expr5//
   |  |  **|**  | //Expr5//
@@ -114,6 +121,7 @@ All other symbols are terminals.
   |  |  **|**  | //Expr2//
   | //Expr// | -> | //Expr1// ``||`` //Expr//
   |  |  **|**  | //Expr1//
+  | //Expr8// | -> | ``(`` //Expr// ``)``
   | //[Expr]// | -> | **eps**
   |  |  **|**  | //Expr//
   |  |  **|**  | //Expr// ``,`` //[Expr]//

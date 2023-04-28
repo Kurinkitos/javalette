@@ -22,13 +22,13 @@ compileProgram :: String -> Int -> IO ()
 compileProgram program v =
   case pProg (myLexer program) of
     Left err -> do
-      hPutStrLn stderr "ERROR"
+      hPutStrLn stderr "PARSE ERROR"
       hPutStrLn stderr err
       exitFailure
     Right ast ->
       case typecheck ast of
         Left err -> do
-          hPutStrLn stderr "ERROR"
+          hPutStrLn stderr "TYPE ERROR"
           hPutStrLn stderr err
           exitFailure
         Right (prog, fsigs) -> do

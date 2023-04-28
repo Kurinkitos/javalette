@@ -111,10 +111,10 @@ typecheckStatement retType (BStmt (Block stms)) = do
 typecheckStatement _ (Decl vType decls) = do
     checkedDeclarations <- mapM (typecheckDeclaration vType) decls
     return (Decl vType checkedDeclarations)
-typecheckStatement _ (Ass ident expr) = do
+typecheckStatement _ (Ass (LIdent ident) expr) = do
     vType <- lookupVariable ident
     checkedExpr <- typecheckExpression vType expr
-    return (Ass ident checkedExpr)
+    return (Ass (LIdent ident) checkedExpr)
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -151,9 +151,9 @@ typecheckStatement _ (SExp expr) = do
 
 typecheckDeclaration :: Type -> Item -> TCExceptRWS Item
 typecheckDeclaration Void _ = throwE "Can't declare a variable of type void"
-typecheckDeclaration dType (NoInit ident) = do
+typecheckDeclaration dType (NoInitVar ident) = do
     typecheckDeclaration' dType ident
-    return (NoInit ident)
+    return (NoInitVar ident)
 typecheckDeclaration dType (Init ident expr) = do
     checkedExp <- typecheckExpression dType expr
     typecheckDeclaration' dType ident
@@ -248,8 +248,12 @@ inferType expr = do
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (liftM Right m) (return . Left)
 
+-- A little map trick to make a list of all types, followed by arrays of all possible types
 types :: [Type]
-types = [Int, Doub, Bool, Void]
+types = [Void] ++ types' ++ map Array types'
+
+types' :: [Type]
+types' = [Int, Doub, Bool]
 
 checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
 -- printString needs special handeling since String is not a type in Javalette

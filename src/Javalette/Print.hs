@@ -175,7 +175,7 @@ instance Print Javalette.Abs.Stmt where
     Javalette.Abs.Empty -> prPrec i 0 (concatD [doc (showString ";")])
     Javalette.Abs.BStmt blk -> prPrec i 0 (concatD [prt 0 blk])
     Javalette.Abs.Decl type_ items -> prPrec i 0 (concatD [prt 0 type_, prt 0 items, doc (showString ";")])
-    Javalette.Abs.Ass id_ expr -> prPrec i 0 (concatD [prt 0 id_, doc (showString "="), prt 0 expr, doc (showString ";")])
+    Javalette.Abs.Ass lval expr -> prPrec i 0 (concatD [prt 0 lval, doc (showString "="), prt 0 expr, doc (showString ";")])
     Javalette.Abs.Incr id_ -> prPrec i 0 (concatD [prt 0 id_, doc (showString "++"), doc (showString ";")])
     Javalette.Abs.Decr id_ -> prPrec i 0 (concatD [prt 0 id_, doc (showString "--"), doc (showString ";")])
     Javalette.Abs.Ret expr -> prPrec i 0 (concatD [doc (showString "return"), prt 0 expr, doc (showString ";")])
@@ -187,7 +187,8 @@ instance Print Javalette.Abs.Stmt where
 
 instance Print Javalette.Abs.Item where
   prt i = \case
-    Javalette.Abs.NoInit id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Javalette.Abs.NoInitVar id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Javalette.Abs.NoInitArr id_ -> prPrec i 0 (concatD [prt 0 id_, doc (showString "["), doc (showString "]")])
     Javalette.Abs.Init id_ expr -> prPrec i 0 (concatD [prt 0 id_, doc (showString "="), prt 0 expr])
 
 instance Print [Javalette.Abs.Item] where
@@ -195,8 +196,14 @@ instance Print [Javalette.Abs.Item] where
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
 
+instance Print Javalette.Abs.LVal where
+  prt i = \case
+    Javalette.Abs.LIdent id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Javalette.Abs.LIndex id_ expr -> prPrec i 0 (concatD [prt 0 id_, doc (showString "["), prt 6 expr, doc (showString "]")])
+
 instance Print Javalette.Abs.Type where
   prt i = \case
+    Javalette.Abs.Array type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "["), doc (showString "]")])
     Javalette.Abs.Int -> prPrec i 0 (concatD [doc (showString "int")])
     Javalette.Abs.Doub -> prPrec i 0 (concatD [doc (showString "double")])
     Javalette.Abs.Bool -> prPrec i 0 (concatD [doc (showString "boolean")])
@@ -210,7 +217,10 @@ instance Print [Javalette.Abs.Type] where
 
 instance Print Javalette.Abs.Expr where
   prt i = \case
-    Javalette.Abs.ETyped type_ expr -> prPrec i 7 (concatD [prt 0 type_, doc (showString "::"), prt 6 expr])
+    Javalette.Abs.ETyped type_ expr -> prPrec i 8 (concatD [prt 0 type_, doc (showString "::"), prt 7 expr])
+    Javalette.Abs.ENew type_ expr -> prPrec i 7 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 6 expr, doc (showString "]")])
+    Javalette.Abs.EIndex id_ expr -> prPrec i 7 (concatD [prt 0 id_, doc (showString "["), prt 6 expr, doc (showString "]")])
+    Javalette.Abs.ELength id_ -> prPrec i 6 (concatD [prt 0 id_, doc (showString "."), doc (showString "length")])
     Javalette.Abs.EVar id_ -> prPrec i 6 (concatD [prt 0 id_])
     Javalette.Abs.ELitInt n -> prPrec i 6 (concatD [prt 0 n])
     Javalette.Abs.ELitDoub d -> prPrec i 6 (concatD [prt 0 d])
@@ -218,8 +228,8 @@ instance Print Javalette.Abs.Expr where
     Javalette.Abs.ELitFalse -> prPrec i 6 (concatD [doc (showString "false")])
     Javalette.Abs.EApp id_ exprs -> prPrec i 6 (concatD [prt 0 id_, doc (showString "("), prt 0 exprs, doc (showString ")")])
     Javalette.Abs.EString str -> prPrec i 6 (concatD [printString str])
-    Javalette.Abs.Neg expr -> prPrec i 5 (concatD [doc (showString "-"), prt 6 expr])
-    Javalette.Abs.Not expr -> prPrec i 5 (concatD [doc (showString "!"), prt 6 expr])
+    Javalette.Abs.Neg expr -> prPrec i 5 (concatD [doc (showString "-"), prt 7 expr])
+    Javalette.Abs.Not expr -> prPrec i 5 (concatD [doc (showString "!"), prt 7 expr])
     Javalette.Abs.EMul expr1 mulop expr2 -> prPrec i 4 (concatD [prt 4 expr1, prt 0 mulop, prt 5 expr2])
     Javalette.Abs.EAdd expr1 addop expr2 -> prPrec i 3 (concatD [prt 3 expr1, prt 0 addop, prt 4 expr2])
     Javalette.Abs.ERel expr1 relop expr2 -> prPrec i 2 (concatD [prt 2 expr1, prt 0 relop, prt 3 expr2])

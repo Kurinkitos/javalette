@@ -24,13 +24,17 @@ BStmt.     Stmt ::= Blk ;
 
 Decl.      Stmt ::= Type [Item] ";" ;
 
-NoInit.    Item ::= Ident ;
+NoInitVar. Item ::= Ident ;
+
+NoInitArr. Item ::= Ident "[" "]" ;
 
 Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr  ";" ;
+--IndexAss.  Stmt ::= Ident "[" Expr "]" "=" Expr ";" ;
+
+Ass.       Stmt ::= LVal "=" Expr  ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -48,7 +52,13 @@ While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
 SExp.      Stmt ::= Expr  ";" ;
 
+-- L values
+LIdent.    LVal ::= Ident ;
+LIndex.    LVal ::= Ident "[" Expr6 "]" ;
+
 -- Types ---------------------------------------------------
+
+Array.     Type ::= Type "[" "]" ;
 
 Int.       Type ::= "int" ;
 
@@ -62,10 +72,18 @@ internal   Fun. Type ::= Type "(" [Type] ")" ;
 
 separator  Type "," ;
 
+
 -- Expressions ---------------------------------------------
 
 -- Typed expression to be used in typechecking, not part of the language
-ETyped.    Expr7 ::= Type "::" Expr6;
+internal ETyped.    Expr8 ::= Type "::" Expr7;
+
+ENew.      Expr7 ::= "new" Type "[" Expr6 "]" ;
+
+EIndex.    Expr7 ::= Ident "[" Expr6 "]" ;
+
+--This is not very expandable, will have to be rewritten to add structures
+ELength.   Expr6 ::= Ident "." "length" ;
 
 EVar.      Expr6 ::= Ident ;
 
@@ -81,9 +99,9 @@ EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
 
 EString.   Expr6 ::= String ;
 
-Neg.       Expr5 ::= "-" Expr6 ;
+Neg.       Expr5 ::= "-" Expr7 ;
 
-Not.       Expr5 ::= "!" Expr6 ;
+Not.       Expr5 ::= "!" Expr7 ;
 
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 
@@ -95,7 +113,7 @@ EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 7 ;
+coercions  Expr 8 ;
 
 separator  Expr "," ;
 

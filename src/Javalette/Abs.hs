@@ -26,7 +26,7 @@ data Stmt
     = Empty
     | BStmt Blk
     | Decl Type [Item]
-    | Ass Ident Expr
+    | Ass LVal Expr
     | Incr Ident
     | Decr Ident
     | Ret Expr
@@ -37,14 +37,20 @@ data Stmt
     | SExp Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data Item = NoInit Ident | Init Ident Expr
+data Item = NoInitVar Ident | NoInitArr Ident | Init Ident Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data Type = Int | Doub | Bool | Void | Fun Type [Type]
+data LVal = LIdent Ident | LIndex Ident Expr
+  deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+data Type = Array Type | Int | Doub | Bool | Void | Fun Type [Type]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Expr
     = ETyped Type Expr
+    | ENew Type Expr
+    | EIndex Ident Expr
+    | ELength Ident
     | EVar Ident
     | ELitInt Integer
     | ELitDoub Double
