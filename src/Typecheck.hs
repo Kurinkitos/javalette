@@ -12,6 +12,7 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
 import Data.Either (lefts, rights)
+import Javalette.Abs (Type(Bool))
 
 -- The list of maps represents variables, forming a stack to permit shadowing
 data FunctionSig = FunctionSig Type [Type]
@@ -85,7 +86,7 @@ typecheckFunction' :: TopDef -> TCExceptRWS TopDef
 typecheckFunction' (FnDef retType ident args (Block stms)) = do
     if Void `elem` map argToType args then
             throwE "Void is not allowed as a argument type"
-        else 
+        else
             FnDef retType ident args . Block <$> checkedStms
     where
         checkedStms = mapM (typecheckStatement retType) stms
@@ -115,6 +116,7 @@ typecheckStatement _ (Ass (LIdent ident) expr) = do
     vType <- lookupVariable ident
     checkedExpr <- typecheckExpression vType expr
     return (Ass (LIdent ident) checkedExpr)
+typecheckStatement _ (Ass (LIndex ident iExpr) assExpr) = undefined
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -178,6 +180,7 @@ typecheckExpression eType e@(EVar ident) = do
         return $ ETyped eType e
     else
         throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
+typecheckExpression eType e@(EIndex ident expr) = undefined
 typecheckExpression Int e@(ELitInt _) = return $ ETyped Int e
 typecheckExpression eType (ELitInt _) = throwE $ "Int expected, found: " ++ show eType
 
@@ -233,6 +236,23 @@ typecheckExpression Bool (EOr e1 e2) = do
     checkedE2 <- typecheckExpression Bool e2
     return $ ETyped Bool $ EOr checkedE1 checkedE2
 typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
+typecheckExpression eType (ENew aType sExpr) = 
+    if Array aType == eType then do
+        checkedExpr <- typecheckExpression Int sExpr
+        return $ ETyped (Array aType) (ENew aType checkedExpr)
+    else do
+        throwE $ "Trying to assign a new array of " ++ show aType ++ " to variable of type" ++ show eType
+
+typecheckExpression Int e@(ELength ident) = do
+    arrType <- lookupVariable ident
+    if isArrayType arrType then
+        return $ ETyped Int e
+    else
+        throwE $ show ident ++ " is not an array type!"
+typecheckExpression eType (ELength ident) = throwE $ "Length returns Int, " ++ show eType ++ " expected"
+
+isArrayType :: Type -> Bool
+isArrayType t = t `elem` arrayTypes
 
 inferType :: Expr -> TCExceptRWS Type
 inferType expr = do
@@ -250,10 +270,13 @@ tryE m = catchE (liftM Right m) (return . Left)
 
 -- A little map trick to make a list of all types, followed by arrays of all possible types
 types :: [Type]
-types = [Void] ++ types' ++ map Array types'
+types = [Void] ++ baseTypes ++ arrayTypes
 
-types' :: [Type]
-types' = [Int, Doub, Bool]
+baseTypes :: [Type]
+baseTypes = [Int, Doub, Bool]
+
+arrayTypes :: [Type]
+arrayTypes = map Array baseTypes
 
 checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
 -- printString needs special handeling since String is not a type in Javalette
