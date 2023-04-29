@@ -116,7 +116,12 @@ typecheckStatement _ (Ass (LIdent ident) expr) = do
     vType <- lookupVariable ident
     checkedExpr <- typecheckExpression vType expr
     return (Ass (LIdent ident) checkedExpr)
-typecheckStatement _ (Ass (LIndex ident iExpr) assExpr) = undefined
+typecheckStatement _ (Ass (LIndex ident iExpr) assExpr) = do
+    aType <- lookupVariable ident
+    vType <- elementType aType
+    checkedIExpr <- typecheckExpression Int iExpr
+    checkedAssExpr <- typecheckExpression vType assExpr
+    return $ Ass (LIndex ident checkedIExpr) checkedAssExpr
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -146,10 +151,18 @@ typecheckStatement rType (While expr stmt) = do
     checkedExpr <- typecheckExpression Bool expr
     checkedStm <- typecheckStatement rType stmt
     return (While checkedExpr checkedStm)
+typecheckStatement rType (For itType itIdent arr stmt) = do
+    old_state <- lift get
+    let forState = Map.fromList [(itIdent, itType)]
+    lift $ put $ forState:old_state
+    checkedExpr <- typecheckExpression (Array itType) arr
+    checkedStm <- typecheckStatement rType stmt
+    -- Restore old state
+    lift $ put old_state
+    return (For itType itIdent checkedExpr checkedStm)
 typecheckStatement _ (SExp expr) = do
     checkedExpr <- typecheckExpression Void expr
     return (SExp checkedExpr)
-
 
 typecheckDeclaration :: Type -> Item -> TCExceptRWS Item
 typecheckDeclaration Void _ = throwE "Can't declare a variable of type void"
@@ -253,6 +266,10 @@ typecheckExpression eType (ELength ident) = throwE $ "Length returns Int, " ++ s
 
 isArrayType :: Type -> Bool
 isArrayType t = t `elem` arrayTypes
+
+elementType :: Type -> TCExceptRWS Type
+elementType (Array eType) = return eType
+elementType typ = throwE $ "elementType called on " ++ show typ
 
 inferType :: Expr -> TCExceptRWS Type
 inferType expr = do
