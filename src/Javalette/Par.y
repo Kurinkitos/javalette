@@ -126,7 +126,6 @@ Stmt
 Item :: { Javalette.Abs.Item }
 Item
   : Ident { Javalette.Abs.NoInitVar $1 }
-  | Ident '[' ']' { Javalette.Abs.NoInitArr $1 }
   | Ident '=' Expr { Javalette.Abs.Init $1 $3 }
 
 ListItem :: { [Javalette.Abs.Item] }

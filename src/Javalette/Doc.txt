@@ -43,8 +43,8 @@ The reserved words used in Javalette are the following:
 
 The symbols used in Javalette are the following:
   | ( | ) | , | {
-  | } | ; | [ | ]
-  | = | ++ | -- | :
+  | } | ; | = | ++
+  | -- | : | [ | ]
   | . | - | ! | &&
   | || | + | * | /
   | % | < | <= | >
@@ -84,7 +84,6 @@ All other symbols are terminals.
   |  |  **|**  | ``for`` ``(`` //Type// //Ident// ``:`` //Expr// ``)`` //Stmt//
   |  |  **|**  | //Expr// ``;``
   | //Item// | -> | //Ident//
-  |  |  **|**  | //Ident// ``[`` ``]``
   |  |  **|**  | //Ident// ``=`` //Expr//
   | //[Item]// | -> | //Item//
   |  |  **|**  | //Item// ``,`` //[Item]//

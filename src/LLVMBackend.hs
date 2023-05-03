@@ -80,11 +80,11 @@ cgFun fsigs (FnDef retType fIdent fnArgs (Block stms)) = mdo
     where
         fnBody o = mdo
             _unit <- evalRWST (cgFnBody stms fnArgs o) fsigs [Map.empty]
-            isTerminated <- hasTerminator 
+            isTerminated <- hasTerminator
             if isTerminated then
                 return ()
             else mdo
-                unreachable 
+                unreachable
 
 
 
@@ -117,7 +117,7 @@ cgDecl :: Javalette.Abs.Type -> Item -> CgMonad ()
 cgDecl vType (NoInitVar ident) = mdo
     vOp <- cgDecl' vType ident
     -- Default values for variables
-    case vType of 
+    case vType of
       Int -> store vOp 0 (ConstantOperand (C.Int 32 0))
       Doub -> store vOp 0 (ConstantOperand (C.Float (F.Double 0.0)))
       Bool -> store vOp 0 (ConstantOperand (C.Int 1 0))
@@ -148,6 +148,8 @@ cgStm (Ass (LIdent ident) expr) = mdo
     vOp <- lookupVar ident
     exprOp <- cgExpr expr
     store vOp 0 exprOp
+cgStm (Ass (LIndex ident iexpr) expr) = mdo
+    undefined
 cgStm (Incr ident) = mdo
     vOp <- lookupVar ident
     vVal <- load vOp 0
@@ -168,10 +170,10 @@ cgStm (Cond expr stms) = mdo
     tBlock <- block `named` "true"
     cgStm stms
     -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
-    isTerminated <- hasTerminator 
+    isTerminated <- hasTerminator
     if isTerminated then mdo
         _unreachBlock <- block `named` "unreachable"
-        unreachable 
+        unreachable
     else mdo
         br fBlock
     fBlock <- block `named` "false"
@@ -183,19 +185,19 @@ cgStm (CondElse expr tStms fStms) = mdo
     tBlock <- block `named` "true"
     cgStm tStms
     -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
-    isTerminated <- hasTerminator 
+    isTerminated <- hasTerminator
     if isTerminated then mdo
         _unreachBlock <- block `named` "unreachable"
-        unreachable 
+        unreachable
     else mdo
         br eBlock
     fBlock <- block `named` "false"
     cgStm fStms
     -- To handle a bug in IRBuilder we need to handle the case where the block from stms emited a terminator like ret
-    isTerminated2 <- hasTerminator 
+    isTerminated2 <- hasTerminator
     if isTerminated2 then mdo
         _unreachBlock <- block `named` "unreachable"
-        unreachable 
+        unreachable
     else mdo
         br eBlock
     eBlock <- block `named` "end"
@@ -207,21 +209,22 @@ cgStm (While expr stms) = mdo
     condBr condOp loopBody endL
     loopBody <- block `named` "loopBody"
     cgStm stms
-    isTerminated <- hasTerminator 
+    isTerminated <- hasTerminator
     if isTerminated then mdo
         _unreachBlock <- block `named` "unreachable"
-        unreachable 
+        unreachable
     else mdo
         br condL
     endL <- block `named` "endL"
     return ()
+cgStm (For elemType itVarIdent arrExpr stms) = undefined
 cgStm (SExp expr) = mdo
     _ <- cgExpr expr
     return ()
 
 cgExpr :: Expr -> CgMonad Operand
 cgExpr (ETyped eType expr) = case expr of
-    ETyped _ iexpr -> error "Malformed AST! Nested Etyped"
+    ETyped _ _iexpr -> error "Malformed AST! Nested Etyped"
     EVar ident -> mdo
         varPtr <- lookupVar ident
         load varPtr 0
@@ -233,7 +236,7 @@ cgExpr (ETyped eType expr) = case expr of
         fOps <- mapM cgExpr exprs
         fPtr <- lookupFunction fIdent
         call fPtr (encodeFunOperands fOps)
-    EString str -> mdo -- String literals is handled in a special case since it is not a type
+    EString _str -> mdo -- String literals is handled in a special case since it is not a type
         error "Unreachable!"
     Neg sexpr -> mdo
         expOp <- cgExpr sexpr
@@ -286,11 +289,11 @@ cgExpr (ETyped eType expr) = case expr of
         expr2Op <- cgExpr expr2
         condBr expr2Op trueL falseL
         trueL <- block `named` "trueL"
-        store res_ptr 0 (ConstantOperand (C.Int 1 1)) 
+        store res_ptr 0 (ConstantOperand (C.Int 1 1))
         br endL
         falseL <- block `named` "falseL"
         store res_ptr 0 (ConstantOperand (C.Int 1 0))
-        br endL 
+        br endL
         endL <- block `named` "end"
         load res_ptr 0
     EOr expr1 expr2 -> mdo
@@ -298,17 +301,21 @@ cgExpr (ETyped eType expr) = case expr of
         res_ptr <- alloca (encodeType Bool) Nothing 0
         expr1Op <- cgExpr expr1
         condBr expr1Op trueL e1False
-        e1False <- block `named` "e1False" 
+        e1False <- block `named` "e1False"
         expr2Op <- cgExpr expr2
         condBr expr2Op trueL falseL
         trueL <- block `named` "trueL"
-        store res_ptr 0 (ConstantOperand (C.Int 1 1)) 
+        store res_ptr 0 (ConstantOperand (C.Int 1 1))
         br endL
         falseL <- block `named` "falseL"
         store res_ptr 0 (ConstantOperand (C.Int 1 0))
-        br endL 
+        br endL
         endL <- block `named` "end"
         load res_ptr 0
+    ENew t expr -> mdo
+        undefined
+    EIndex ident expr -> undefined
+    ELength ident -> undefined
 cgExpr (EString str) = mdo
     let str_hash = BSS.toShort $ BSC.pack $ show $ hash str
     strName <- freshName str_hash
@@ -374,7 +381,8 @@ encodeType Int = IntegerType 32
 encodeType Doub = FloatingPointType DoubleFP
 encodeType Bool = IntegerType 1
 encodeType Void = VoidType
-encodeType (Fun retType args) = undefined --Should not happen, since we don't have function pointers
+encodeType (Array elemType) = StructureType False [IntegerType 32, ArrayType 0 (encodeType elemType)]
+encodeType (Fun _retType _args) = error "No function types allowed!" --Should not happen, since we don't have function pointers
 
 encodeArgs :: [Arg] -> [(LLVM.AST.Type, ParameterName)]
 encodeArgs = map encodeArg

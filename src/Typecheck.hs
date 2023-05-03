@@ -12,7 +12,6 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
 import Data.Either (lefts, rights)
-import Javalette.Abs (Type(Bool))
 
 -- The list of maps represents variables, forming a stack to permit shadowing
 data FunctionSig = FunctionSig Type [Type]

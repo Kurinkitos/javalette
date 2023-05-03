@@ -38,7 +38,7 @@ data Stmt
     | SExp Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data Item = NoInitVar Ident | NoInitArr Ident | Init Ident Expr
+data Item = NoInitVar Ident | Init Ident Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data LVal = LIdent Ident | LIndex Ident Expr

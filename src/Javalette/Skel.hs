@@ -54,7 +54,6 @@ transStmt x = case x of
 transItem :: Javalette.Abs.Item -> Result
 transItem x = case x of
   Javalette.Abs.NoInitVar ident -> failure x
-  Javalette.Abs.NoInitArr ident -> failure x
   Javalette.Abs.Init ident expr -> failure x
 
 transLVal :: Javalette.Abs.LVal -> Result

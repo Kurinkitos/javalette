@@ -189,7 +189,6 @@ instance Print Javalette.Abs.Stmt where
 instance Print Javalette.Abs.Item where
   prt i = \case
     Javalette.Abs.NoInitVar id_ -> prPrec i 0 (concatD [prt 0 id_])
-    Javalette.Abs.NoInitArr id_ -> prPrec i 0 (concatD [prt 0 id_, doc (showString "["), doc (showString "]")])
     Javalette.Abs.Init id_ expr -> prPrec i 0 (concatD [prt 0 id_, doc (showString "="), prt 0 expr])
 
 instance Print [Javalette.Abs.Item] where

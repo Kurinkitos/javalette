@@ -26,8 +26,6 @@ Decl.      Stmt ::= Type [Item] ";" ;
 
 NoInitVar. Item ::= Ident ;
 
-NoInitArr. Item ::= Ident "[" "]" ;
-
 Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
