@@ -53,12 +53,14 @@ cgBuiltinDefs = mdo
     printStringPtr <- extern "printString" [PointerType (IntegerType 8) (AddrSpace 0)] (encodeType Void)
     readIntPtr <- extern "readInt" [] (encodeType Int)
     readDoublePtr <- extern "readDouble" [] (encodeType Doub)
+    callocPtr <- extern "calloc" [IntegerType 32, IntegerType 32] (PointerType (IntegerType 8) (AddrSpace 0))
     return
         [ (Ident "printInt", printIntPtr)
         , (Ident "printDouble", printDoublePtr)
         , (Ident "printString", printStringPtr)
         , (Ident "readInt", readIntPtr)
         , (Ident "readDouble", readDoublePtr)
+        , (Ident "calloc", callocPtr)
         ]
 
 pushFnDefs :: [(Ident, FunctionSig)] -> ModuleBuilder [(Ident, Operand)]
@@ -312,8 +314,20 @@ cgExpr (ETyped eType expr) = case expr of
         br endL
         endL <- block `named` "end"
         load res_ptr 0
-    ENew t expr -> mdo
-        undefined
+    ENew t sExpr -> mdo
+        nElements <- cgExpr sExpr
+        let elemSize = C.sizeof (encodeType t)
+        arraySize <- mul nElements (ConstantOperand elemSize)
+        let intSize = C.sizeof (encodeType Int)
+        -- total memory to allocate, adding a int to keep the size of the array
+        memAmount <- add arraySize (ConstantOperand intSize)
+        callocPtr <- lookupFunction (Ident "calloc")
+        arrayMemPtr <- call callocPtr [(memAmount, []), (ConstantOperand (C.Int 32 1), [])]
+        --  Get a pointer of the right type
+        arrayPtr <- bitcast arrayMemPtr (encodeType eType)
+        lengthPtr <- gep arrayPtr [ConstantOperand (C.Int 32 0)]
+        store lengthPtr 0 nElements
+        return arrayPtr
     EIndex ident expr -> undefined
     ELength ident -> undefined
 cgExpr (EString str) = mdo
@@ -381,7 +395,7 @@ encodeType Int = IntegerType 32
 encodeType Doub = FloatingPointType DoubleFP
 encodeType Bool = IntegerType 1
 encodeType Void = VoidType
-encodeType (Array elemType) = StructureType False [IntegerType 32, ArrayType 0 (encodeType elemType)]
+encodeType (Array elemType) = PointerType (StructureType False [IntegerType 32, ArrayType 0 (encodeType elemType)]) (AddrSpace 0)
 encodeType (Fun _retType _args) = error "No function types allowed!" --Should not happen, since we don't have function pointers
 
 encodeArgs :: [Arg] -> [(LLVM.AST.Type, ParameterName)]
