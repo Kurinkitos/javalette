@@ -192,7 +192,15 @@ typecheckExpression eType e@(EVar ident) = do
         return $ ETyped eType e
     else
         throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
-typecheckExpression eType e@(EIndex ident expr) = undefined
+typecheckExpression eType (EIndex ident expr) = do
+    aType <- lookupVariable ident
+    vType <- elementType aType
+    if vType == eType then do
+        checkedIExpr <- typecheckExpression Int expr
+        return $ ETyped eType (EIndex ident checkedIExpr)
+    else 
+        throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
+
 typecheckExpression Int e@(ELitInt _) = return $ ETyped Int e
 typecheckExpression eType (ELitInt _) = throwE $ "Int expected, found: " ++ show eType
 

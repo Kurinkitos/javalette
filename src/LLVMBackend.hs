@@ -151,7 +151,17 @@ cgStm (Ass (LIdent ident) expr) = mdo
     exprOp <- cgExpr expr
     store vOp 0 exprOp
 cgStm (Ass (LIndex ident iexpr) expr) = mdo
-    undefined
+    exprOp <- cgExpr expr
+    indexOp <- cgExpr iexpr
+    arrPtr <- lookupVar ident
+    arrOp <- load arrPtr 0
+    indexAddr <- gep arrOp 
+        [ConstantOperand (C.Int 32 0) -- Get the structure pointer
+        , ConstantOperand (C.Int 32 1) -- Get the array from the structure
+        , indexOp -- Finally index the array
+        ]
+    store indexAddr 0 exprOp
+
 cgStm (Incr ident) = mdo
     vOp <- lookupVar ident
     vVal <- load vOp 0
@@ -219,7 +229,18 @@ cgStm (While expr stms) = mdo
         br condL
     endL <- block `named` "endL"
     return ()
-cgStm (For elemType itVarIdent arrExpr stms) = undefined
+cgStm (For elemType itVarIdent arrExpr stms) = mdo
+    -- A variable to keep what element we are on
+    itCount <- alloca (encodeType Int) Nothing 0
+    store itCount 0 (ConstantOperand (C.Int 32 0))
+    -- Get array length
+    arrPtr <- cgExpr arrExpr 
+    arrOp <- load arrPtr 0
+    lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
+    arrayLength <- load lengthAddr 0
+
+    undefined
+
 cgStm (SExp expr) = mdo
     _ <- cgExpr expr
     return ()
@@ -325,11 +346,27 @@ cgExpr (ETyped eType expr) = case expr of
         arrayMemPtr <- call callocPtr [(memAmount, []), (ConstantOperand (C.Int 32 1), [])]
         --  Get a pointer of the right type
         arrayPtr <- bitcast arrayMemPtr (encodeType eType)
-        lengthPtr <- gep arrayPtr [ConstantOperand (C.Int 32 0)]
+        lengthAddr <- gep arrayPtr [ConstantOperand (C.Int 32 0)]
+        -- This is not nessesary in LLVM, but llvm-hs-pure emits the wrong types from gep so we need to cast
+        lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 nElements
         return arrayPtr
-    EIndex ident expr -> undefined
-    ELength ident -> undefined
+    EIndex ident iExpr -> mdo
+        arrPtr <- lookupVar ident
+        arrOp <- load arrPtr 0
+        indexOp <- cgExpr iExpr
+        indexAddr <- gep arrOp 
+            [ConstantOperand (C.Int 32 0) -- Get the structure pointer
+            , ConstantOperand (C.Int 32 1) -- Get the array from the structure
+            , indexOp -- Finally index the array
+            ]
+        load indexAddr 0
+    ELength ident -> mdo
+        arrPtr <- lookupVar ident
+        arrOp <- load arrPtr 0
+        lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
+        load lengthAddr 0
+
 cgExpr (EString str) = mdo
     let str_hash = BSS.toShort $ BSC.pack $ show $ hash str
     strName <- freshName str_hash
