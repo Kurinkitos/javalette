@@ -230,16 +230,37 @@ cgStm (While expr stms) = mdo
     endL <- block `named` "endL"
     return ()
 cgStm (For elemType itVarIdent arrExpr stms) = mdo
+    br start
+    start <- block `named` "start"
+    -- Allocate the variable to hold the elements
+    cgDecl elemType (NoInitVar itVarIdent)
+    itElemVar <- lookupVar itVarIdent
     -- A variable to keep what element we are on
     itCount <- alloca (encodeType Int) Nothing 0
     store itCount 0 (ConstantOperand (C.Int 32 0))
     -- Get array length
-    arrPtr <- cgExpr arrExpr 
-    arrOp <- load arrPtr 0
+    arrOp <- cgExpr arrExpr 
+    --arrOp <- load arrPtr 0
     lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
     arrayLength <- load lengthAddr 0
+    -- Start of loop
+    br loopL
+    loopL <- block `named` "loopL"
+    -- Load current element
+    offset <- load itCount 0
+    elementAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 1), offset]
+    elementOp <- load elementAddr 0
+    store itElemVar 0 elementOp
+    cgStm stms
+    -- Increment counter
+    itVal <- load itCount 0
+    newVal <- add itVal (ConstantOperand (C.Int 32 1))
+    store itCount 0 newVal
+    endOfList <- icmp (encodeIRelOp GE) newVal arrayLength
+    condBr endOfList end loopL
+    end <- block `named` "endL"
+    return ()
 
-    undefined
 
 cgStm (SExp expr) = mdo
     _ <- cgExpr expr
