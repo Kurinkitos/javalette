@@ -97,9 +97,9 @@ EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
 
 EString.   Expr6 ::= String ;
 
-Neg.       Expr5 ::= "-" Expr7 ;
+Neg.       Expr5 ::= "-" Expr5 ;
 
-Not.       Expr5 ::= "!" Expr7 ;
+Not.       Expr5 ::= "!" Expr5 ;
 
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 

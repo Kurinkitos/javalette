@@ -170,8 +170,8 @@ Expr6
 
 Expr5 :: { Javalette.Abs.Expr }
 Expr5
-  : '-' Expr7 { Javalette.Abs.Neg $2 }
-  | '!' Expr7 { Javalette.Abs.Not $2 }
+  : '-' Expr5 { Javalette.Abs.Neg $2 }
+  | '!' Expr5 { Javalette.Abs.Not $2 }
   | Expr6 { $1 }
 
 Expr4 :: { Javalette.Abs.Expr }

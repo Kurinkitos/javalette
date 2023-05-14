@@ -109,8 +109,8 @@ All other symbols are terminals.
   |  |  **|**  | //Ident// ``(`` //[Expr]// ``)``
   |  |  **|**  | //String//
   |  |  **|**  | //Expr7//
-  | //Expr5// | -> | ``-`` //Expr7//
-  |  |  **|**  | ``!`` //Expr7//
+  | //Expr5// | -> | ``-`` //Expr5//
+  |  |  **|**  | ``!`` //Expr5//
   |  |  **|**  | //Expr6//
   | //Expr4// | -> | //Expr4// //MulOp// //Expr5//
   |  |  **|**  | //Expr5//
