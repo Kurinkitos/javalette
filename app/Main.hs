@@ -9,7 +9,7 @@ debug = True
 main :: IO ()
 main = do
   if debug then do
-    handle <- openFile "/home/lilly/tda283/tester/testsuite/extensions/arrays1/array001.jl" ReadMode
+    handle <- openFile "/home/lilly/tda283/tester/testsuite/extensions/arrays1/array_default.jl" ReadMode
     --handle <- openFile "small.jl" ReadMode
     program_src <- hGetContents handle
     compileProgram program_src 2

@@ -75,7 +75,7 @@ transExpr x = case x of
   Javalette.Abs.ETyped type_ expr -> failure x
   Javalette.Abs.ENew type_ expr -> failure x
   Javalette.Abs.EIndex ident expr -> failure x
-  Javalette.Abs.ELength ident -> failure x
+  Javalette.Abs.ESelect expr ident -> failure x
   Javalette.Abs.EVar ident -> failure x
   Javalette.Abs.ELitInt integer -> failure x
   Javalette.Abs.ELitDoub double -> failure x

@@ -261,15 +261,17 @@ typecheckExpression eType (ENew aType sExpr) =
         checkedExpr <- typecheckExpression Int sExpr
         return $ ETyped (Array aType) (ENew aType checkedExpr)
     else do
-        throwE $ "Trying to assign a new array of " ++ show aType ++ " to variable of type" ++ show eType
+        throwE $ "Trying to assign a new array of " ++ show aType ++ "s to variable of type " ++ show eType
 
-typecheckExpression Int e@(ELength ident) = do
-    arrType <- lookupVariable ident
-    if isArrayType arrType then
-        return $ ETyped Int e
+--
+typecheckExpression Int e@(ESelect aExpr (Ident "length")) = do
+    aType <- inferType aExpr
+    checkedAExpr <- typecheckExpression aType aExpr
+    if isArrayType aType then
+        return $ ETyped Int (ESelect checkedAExpr (Ident "length"))
     else
-        throwE $ show ident ++ " is not an array type!"
-typecheckExpression eType (ELength ident) = throwE $ "Length returns Int, " ++ show eType ++ " expected"
+        throwE $ show e ++ " is not an array type!"
+typecheckExpression eType (ESelect sExpr ident) = throwE "Not implemented"
 
 isArrayType :: Type -> Bool
 isArrayType t = t `elem` arrayTypes

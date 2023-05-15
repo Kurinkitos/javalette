@@ -51,7 +51,7 @@ data Expr
     = ETyped Type Expr
     | ENew Type Expr
     | EIndex Ident Expr
-    | ELength Ident
+    | ESelect Expr Ident
     | EVar Ident
     | ELitInt Integer
     | ELitDoub Double

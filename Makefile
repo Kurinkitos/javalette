@@ -12,7 +12,7 @@ SUB_PATH   = $(shell stack path --local-install-root)
 
 # List of goals not corresponding to file names.
 
-.PHONY : all clean distclean compiler
+.PHONY : all clean distclean compiler invoke
 
 # Default goal.
 
@@ -26,7 +26,12 @@ compiler : src/Javalette/Abs.hs
 
 
 test : compiler
-	./runtest.sh .
+	./runtest.sh -l -x arrays1 .
+
+invoke: compiler
+	stack run > prog.ll
+	clang -g -O0 prog.ll runtime.bc
+	./a.out
 # Rules for building the parser.
 
 # sed hack since bnfc gives the generated tester an invalid name

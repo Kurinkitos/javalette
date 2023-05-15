@@ -52,7 +52,7 @@ SExp.      Stmt ::= Expr  ";" ;
 
 -- L values
 LIdent.    LVal ::= Ident ;
-LIndex.    LVal ::= Ident "[" Expr6 "]" ;
+LIndex.    LVal ::= Ident "[" Expr "]" ;
 
 -- Types ---------------------------------------------------
 
@@ -74,14 +74,15 @@ separator  Type "," ;
 -- Expressions ---------------------------------------------
 
 -- Typed expression to be used in typechecking, not part of the language
-internal ETyped.    Expr8 ::= Type "::" Expr7;
+internal ETyped.    Expr9 ::= Type "::" Expr8;
 
-ENew.      Expr7 ::= "new" Type "[" Expr6 "]" ;
 
-EIndex.    Expr7 ::= Ident "[" Expr6 "]" ;
+ENew.      Expr7 ::= "new" Type "[" Expr "]" ;
 
---This is not very expandable, will have to be rewritten to add structures
-ELength.   Expr6 ::= Ident "." "length" ;
+EIndex.    Expr7 ::= Ident "[" Expr "]" ;
+
+-- Currently just for length, but will be used for structures as well
+ESelect.   Expr6 ::= Expr6 "." Ident ;
 
 EVar.      Expr6 ::= Ident ;
 
@@ -111,7 +112,7 @@ EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 8 ;
+coercions  Expr 9 ;
 
 separator  Expr "," ;
 

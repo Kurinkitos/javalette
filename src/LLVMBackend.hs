@@ -9,7 +9,6 @@ import qualified Data.Map as Map
 import Typecheck (FunctionSig (FunctionSig))
 import Data.Text.Lazy (unpack)
 
-import Data.ByteString as BS hiding (map)
 import Data.ByteString.Short as BSS
 import Data.ByteString.Char8 as BSC hiding (tail, map)
 
@@ -123,6 +122,17 @@ cgDecl vType (NoInitVar ident) = mdo
       Int -> store vOp 0 (ConstantOperand (C.Int 32 0))
       Doub -> store vOp 0 (ConstantOperand (C.Float (F.Double 0.0)))
       Bool -> store vOp 0 (ConstantOperand (C.Int 1 0))
+      Array _ -> mdo
+        -- Similar logic as in new, but with an array size of zero
+        let intSize = C.sizeof (encodeType Int)
+        callocPtr <- lookupFunction (Ident "calloc")
+        arrayMemPtr <- call callocPtr [(ConstantOperand intSize, []), (ConstantOperand (C.Int 32 1), [])]
+        --  Get a pointer of the right type
+        arrayPtr <- bitcast arrayMemPtr (encodeType vType)
+        lengthAddr <- gep arrayPtr [ConstantOperand (C.Int 32 0)]
+        -- This is not nessesary in LLVM, but llvm-hs-pure emits the wrong types from gep so we need to cast
+        lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
+        store lengthPtr 0 (ConstantOperand (C.Int 32 0))
       _ -> error "Malformed AST! Variable of dissalowed type"
 cgDecl vType (Init ident expr) = mdo
     exprOp <- cgExpr expr
@@ -382,11 +392,11 @@ cgExpr (ETyped eType expr) = case expr of
             , indexOp -- Finally index the array
             ]
         load indexAddr 0
-    ELength ident -> mdo
-        arrPtr <- lookupVar ident
-        arrOp <- load arrPtr 0
-        lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
+    ESelect aExpr (Ident "length") -> mdo
+        arrPtr <- cgExpr aExpr
+        lengthAddr <- gep arrPtr [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
         load lengthAddr 0
+    ESelect _sExpr _ident -> error "Only supports .length for now"
 
 cgExpr (EString str) = mdo
     let str_hash = BSS.toShort $ BSC.pack $ show $ hash str

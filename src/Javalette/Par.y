@@ -54,15 +54,14 @@ import Javalette.Lex
   'for'     { PT _ (TS _ 29) }
   'if'      { PT _ (TS _ 30) }
   'int'     { PT _ (TS _ 31) }
-  'length'  { PT _ (TS _ 32) }
-  'new'     { PT _ (TS _ 33) }
-  'return'  { PT _ (TS _ 34) }
-  'true'    { PT _ (TS _ 35) }
-  'void'    { PT _ (TS _ 36) }
-  'while'   { PT _ (TS _ 37) }
-  '{'       { PT _ (TS _ 38) }
-  '||'      { PT _ (TS _ 39) }
-  '}'       { PT _ (TS _ 40) }
+  'new'     { PT _ (TS _ 32) }
+  'return'  { PT _ (TS _ 33) }
+  'true'    { PT _ (TS _ 34) }
+  'void'    { PT _ (TS _ 35) }
+  'while'   { PT _ (TS _ 36) }
+  '{'       { PT _ (TS _ 37) }
+  '||'      { PT _ (TS _ 38) }
+  '}'       { PT _ (TS _ 39) }
   L_Ident   { PT _ (TV $$)   }
   L_doubl   { PT _ (TD $$)   }
   L_integ   { PT _ (TI $$)   }
@@ -134,7 +133,7 @@ ListItem : Item { (:[]) $1 } | Item ',' ListItem { (:) $1 $3 }
 LVal :: { Javalette.Abs.LVal }
 LVal
   : Ident { Javalette.Abs.LIdent $1 }
-  | Ident '[' Expr6 ']' { Javalette.Abs.LIndex $1 $3 }
+  | Ident '[' Expr ']' { Javalette.Abs.LIndex $1 $3 }
 
 Type :: { Javalette.Abs.Type }
 Type
@@ -152,13 +151,13 @@ ListType
 
 Expr7 :: { Javalette.Abs.Expr }
 Expr7
-  : 'new' Type '[' Expr6 ']' { Javalette.Abs.ENew $2 $4 }
-  | Ident '[' Expr6 ']' { Javalette.Abs.EIndex $1 $3 }
+  : 'new' Type '[' Expr ']' { Javalette.Abs.ENew $2 $4 }
+  | Ident '[' Expr ']' { Javalette.Abs.EIndex $1 $3 }
   | Expr8 { $1 }
 
 Expr6 :: { Javalette.Abs.Expr }
 Expr6
-  : Ident '.' 'length' { Javalette.Abs.ELength $1 }
+  : Expr6 '.' Ident { Javalette.Abs.ESelect $1 $3 }
   | Ident { Javalette.Abs.EVar $1 }
   | Integer { Javalette.Abs.ELitInt $1 }
   | Double { Javalette.Abs.ELitDoub $1 }
@@ -194,7 +193,10 @@ Expr :: { Javalette.Abs.Expr }
 Expr : Expr1 '||' Expr { Javalette.Abs.EOr $1 $3 } | Expr1 { $1 }
 
 Expr8 :: { Javalette.Abs.Expr }
-Expr8 : '(' Expr ')' { $2 }
+Expr8 : Expr9 { $1 }
+
+Expr9 :: { Javalette.Abs.Expr }
+Expr9 : '(' Expr ')' { $2 }
 
 ListExpr :: { [Javalette.Abs.Expr] }
 ListExpr
