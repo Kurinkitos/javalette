@@ -111,17 +111,11 @@ typecheckStatement retType (BStmt (Block stms)) = do
 typecheckStatement _ (Decl vType decls) = do
     checkedDeclarations <- mapM (typecheckDeclaration vType) decls
     return (Decl vType checkedDeclarations)
-typecheckStatement _ (Ass lExpr@(EVar ident) expr) = do
-    vType <- lookupVariable ident
-    checkedExpr <- typecheckExpression vType expr
-    return (Ass (ETyped vType lExpr) checkedExpr)
 typecheckStatement _ (Ass lExpr assExpr) = do
-    -- This match handles assignment to an array expression of some sort
-    aType <- inferType lExpr
-    checkedAExpr <- typecheckExpression aType lExpr
-    vType <- elementType aType
-    checkedAssExpr <- typecheckExpression vType assExpr
-    return $ Ass (ETyped aType checkedAExpr) checkedAssExpr
+    lType <- inferType lExpr
+    checkedLExpr <- typecheckExpression lType lExpr
+    checkedAssExpr <- typecheckExpression lType assExpr
+    return $ Ass checkedLExpr checkedAssExpr
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -194,16 +188,9 @@ typecheckExpression eType e@(EVar ident) = do
     else
         throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
 typecheckExpression eType (EIndex aExpr iExpr) = do
-    checkedAExpr <- typecheckExpression (eType) aExpr
-    case checkedAExpr of
-        (ETyped aType _) -> do
-            vType <- elementType aType
-            if vType == eType then do
-                checkedIExpr <- typecheckExpression Int iExpr
-                return $ ETyped eType (EIndex checkedAExpr checkedIExpr)
-            else 
-                throwE $ show eType ++ " expected, but " ++ show aExpr ++ " is of type " ++ show vType
-        _ -> throwE "INTERNAL ERROR: typecheckExpression did not return a ETyped"
+    checkedAExpr <- typecheckExpression (Array eType) aExpr
+    checkedIExpr <- typecheckExpression Int iExpr
+    return $ ETyped eType (EIndex checkedAExpr checkedIExpr)
 
 typecheckExpression Int e@(ELitInt _) = return $ ETyped Int e
 typecheckExpression eType (ELitInt _) = throwE $ "Int expected, found: " ++ show eType
@@ -260,7 +247,7 @@ typecheckExpression Bool (EOr e1 e2) = do
     checkedE2 <- typecheckExpression Bool e2
     return $ ETyped Bool $ EOr checkedE1 checkedE2
 typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
-typecheckExpression eType (ENew aType sExpr) = 
+typecheckExpression eType (ENew aType sExpr) =
     if Array aType == eType then do
         checkedExpr <- typecheckExpression Int sExpr
         return $ ETyped (Array aType) (ENew aType checkedExpr)
@@ -288,7 +275,7 @@ inferType :: Expr -> TCExceptRWS Type
 inferType expr = do
     res <- mapM checkExpr types
     case rights res of
-        [] -> throwE $ "INTERNAL ERROR: No type matches that of expression " ++ show expr
+        [] -> throwE $ "INTERNAL ERROR: No type matches that of expression " ++ show expr ++ " errors: " ++ unlines (map show (lefts res) )
         [ETyped t _] -> return t
         _ -> throwE $ "INTERNAL ERROR: Failed to infer type of expression " ++ show expr
     where

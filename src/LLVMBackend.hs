@@ -392,8 +392,8 @@ cgExpr valueKind (ETyped eType expr) = case expr of
             , indexOp -- Finally index the array
             ]
         case valueKind of
-          LValue -> load indexAddr 0
-          RValue -> return indexAddr
+          RValue -> load indexAddr 0
+          LValue -> return indexAddr
 
     ESelect aExpr (Ident "length") -> mdo
         arrPtr <- cgExpr RValue aExpr
