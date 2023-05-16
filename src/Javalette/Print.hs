@@ -196,11 +196,6 @@ instance Print [Javalette.Abs.Item] where
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
 
-instance Print Javalette.Abs.LVal where
-  prt i = \case
-    Javalette.Abs.LIdent id_ -> prPrec i 0 (concatD [prt 0 id_])
-    Javalette.Abs.LIndex expr1 expr2 -> prPrec i 0 (concatD [prt 0 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
-
 instance Print Javalette.Abs.Type where
   prt i = \case
     Javalette.Abs.Array type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "["), doc (showString "]")])

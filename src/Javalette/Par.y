@@ -130,11 +130,6 @@ Item
 ListItem :: { [Javalette.Abs.Item] }
 ListItem : Item { (:[]) $1 } | Item ',' ListItem { (:) $1 $3 }
 
-LVal :: { Javalette.Abs.LVal }
-LVal
-  : Ident { Javalette.Abs.LIdent $1 }
-  | Expr '[' Expr ']' { Javalette.Abs.LIndex $1 $3 }
-
 Type :: { Javalette.Abs.Type }
 Type
   : Type '[' ']' { Javalette.Abs.Array $1 }

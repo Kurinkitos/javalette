@@ -86,8 +86,6 @@ All other symbols are terminals.
   |  |  **|**  | //Ident// ``=`` //Expr//
   | //[Item]// | -> | //Item//
   |  |  **|**  | //Item// ``,`` //[Item]//
-  | //LVal// | -> | //Ident//
-  |  |  **|**  | //Expr// ``[`` //Expr// ``]``
   | //Type// | -> | //Type// ``[`` ``]``
   |  |  **|**  | ``int``
   |  |  **|**  | ``double``

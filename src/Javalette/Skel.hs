@@ -56,11 +56,6 @@ transItem x = case x of
   Javalette.Abs.NoInitVar ident -> failure x
   Javalette.Abs.Init ident expr -> failure x
 
-transLVal :: Javalette.Abs.LVal -> Result
-transLVal x = case x of
-  Javalette.Abs.LIdent ident -> failure x
-  Javalette.Abs.LIndex expr1 expr2 -> failure x
-
 transType :: Javalette.Abs.Type -> Result
 transType x = case x of
   Javalette.Abs.Array type_ -> failure x

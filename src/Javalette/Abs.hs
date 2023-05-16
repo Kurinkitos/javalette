@@ -41,9 +41,6 @@ data Stmt
 data Item = NoInitVar Ident | Init Ident Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data LVal = LIdent Ident | LIndex Expr Expr
-  deriving (C.Eq, C.Ord, C.Show, C.Read)
-
 data Type = Array Type | Int | Doub | Bool | Void | Fun Type [Type]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 

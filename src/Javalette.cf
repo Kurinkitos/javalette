@@ -50,10 +50,6 @@ For.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
 
 SExp.      Stmt ::= Expr  ";" ;
 
--- L values
-LIdent.    LVal ::= Ident ;
-LIndex.    LVal ::= Expr "[" Expr "]" ;
-
 -- Types ---------------------------------------------------
 
 Array.     Type ::= Type "[" "]" ;
