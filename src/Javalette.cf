@@ -30,7 +30,7 @@ Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= LVal "=" Expr  ";" ;
+Ass.       Stmt ::= Expr6 "=" Expr  ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -52,7 +52,7 @@ SExp.      Stmt ::= Expr  ";" ;
 
 -- L values
 LIdent.    LVal ::= Ident ;
-LIndex.    LVal ::= Ident "[" Expr "]" ;
+LIndex.    LVal ::= Expr "[" Expr "]" ;
 
 -- Types ---------------------------------------------------
 
@@ -79,7 +79,7 @@ internal ETyped.    Expr9 ::= Type "::" Expr8;
 
 ENew.      Expr7 ::= "new" Type "[" Expr "]" ;
 
-EIndex.    Expr7 ::= Ident "[" Expr "]" ;
+EIndex.    Expr6 ::= Expr6 "[" Expr "]" ;
 
 -- Currently just for length, but will be used for structures as well
 ESelect.   Expr6 ::= Expr6 "." Ident ;

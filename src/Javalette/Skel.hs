@@ -40,7 +40,7 @@ transStmt x = case x of
   Javalette.Abs.Empty -> failure x
   Javalette.Abs.BStmt blk -> failure x
   Javalette.Abs.Decl type_ items -> failure x
-  Javalette.Abs.Ass lval expr -> failure x
+  Javalette.Abs.Ass expr1 expr2 -> failure x
   Javalette.Abs.Incr ident -> failure x
   Javalette.Abs.Decr ident -> failure x
   Javalette.Abs.Ret expr -> failure x
@@ -59,7 +59,7 @@ transItem x = case x of
 transLVal :: Javalette.Abs.LVal -> Result
 transLVal x = case x of
   Javalette.Abs.LIdent ident -> failure x
-  Javalette.Abs.LIndex ident expr -> failure x
+  Javalette.Abs.LIndex expr1 expr2 -> failure x
 
 transType :: Javalette.Abs.Type -> Result
 transType x = case x of
@@ -74,7 +74,7 @@ transExpr :: Javalette.Abs.Expr -> Result
 transExpr x = case x of
   Javalette.Abs.ETyped type_ expr -> failure x
   Javalette.Abs.ENew type_ expr -> failure x
-  Javalette.Abs.EIndex ident expr -> failure x
+  Javalette.Abs.EIndex expr1 expr2 -> failure x
   Javalette.Abs.ESelect expr ident -> failure x
   Javalette.Abs.EVar ident -> failure x
   Javalette.Abs.ELitInt integer -> failure x

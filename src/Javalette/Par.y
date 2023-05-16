@@ -111,7 +111,7 @@ Stmt
   : ';' { Javalette.Abs.Empty }
   | Blk { Javalette.Abs.BStmt $1 }
   | Type ListItem ';' { Javalette.Abs.Decl $1 $2 }
-  | LVal '=' Expr ';' { Javalette.Abs.Ass $1 $3 }
+  | Expr6 '=' Expr ';' { Javalette.Abs.Ass $1 $3 }
   | Ident '++' ';' { Javalette.Abs.Incr $1 }
   | Ident '--' ';' { Javalette.Abs.Decr $1 }
   | 'return' Expr ';' { Javalette.Abs.Ret $2 }
@@ -133,7 +133,7 @@ ListItem : Item { (:[]) $1 } | Item ',' ListItem { (:) $1 $3 }
 LVal :: { Javalette.Abs.LVal }
 LVal
   : Ident { Javalette.Abs.LIdent $1 }
-  | Ident '[' Expr ']' { Javalette.Abs.LIndex $1 $3 }
+  | Expr '[' Expr ']' { Javalette.Abs.LIndex $1 $3 }
 
 Type :: { Javalette.Abs.Type }
 Type
@@ -152,12 +152,12 @@ ListType
 Expr7 :: { Javalette.Abs.Expr }
 Expr7
   : 'new' Type '[' Expr ']' { Javalette.Abs.ENew $2 $4 }
-  | Ident '[' Expr ']' { Javalette.Abs.EIndex $1 $3 }
   | Expr8 { $1 }
 
 Expr6 :: { Javalette.Abs.Expr }
 Expr6
-  : Expr6 '.' Ident { Javalette.Abs.ESelect $1 $3 }
+  : Expr6 '[' Expr ']' { Javalette.Abs.EIndex $1 $3 }
+  | Expr6 '.' Ident { Javalette.Abs.ESelect $1 $3 }
   | Ident { Javalette.Abs.EVar $1 }
   | Integer { Javalette.Abs.ELitInt $1 }
   | Double { Javalette.Abs.ELitDoub $1 }

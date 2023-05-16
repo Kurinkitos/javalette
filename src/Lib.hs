@@ -30,6 +30,7 @@ compileProgram program v =
         Left err -> do
           hPutStrLn stderr "TYPE ERROR"
           hPutStrLn stderr err
+          showTree v ast
           exitFailure
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"

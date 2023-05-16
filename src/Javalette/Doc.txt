@@ -72,7 +72,7 @@ All other symbols are terminals.
   | //Stmt// | -> | ``;``
   |  |  **|**  | //Blk//
   |  |  **|**  | //Type// //[Item]// ``;``
-  |  |  **|**  | //LVal// ``=`` //Expr// ``;``
+  |  |  **|**  | //Expr6// ``=`` //Expr// ``;``
   |  |  **|**  | //Ident// ``++`` ``;``
   |  |  **|**  | //Ident// ``--`` ``;``
   |  |  **|**  | ``return`` //Expr// ``;``
@@ -87,7 +87,7 @@ All other symbols are terminals.
   | //[Item]// | -> | //Item//
   |  |  **|**  | //Item// ``,`` //[Item]//
   | //LVal// | -> | //Ident//
-  |  |  **|**  | //Ident// ``[`` //Expr// ``]``
+  |  |  **|**  | //Expr// ``[`` //Expr// ``]``
   | //Type// | -> | //Type// ``[`` ``]``
   |  |  **|**  | ``int``
   |  |  **|**  | ``double``
@@ -97,9 +97,9 @@ All other symbols are terminals.
   |  |  **|**  | //Type//
   |  |  **|**  | //Type// ``,`` //[Type]//
   | //Expr7// | -> | ``new`` //Type// ``[`` //Expr// ``]``
-  |  |  **|**  | //Ident// ``[`` //Expr// ``]``
   |  |  **|**  | //Expr8//
-  | //Expr6// | -> | //Expr6// ``.`` //Ident//
+  | //Expr6// | -> | //Expr6// ``[`` //Expr// ``]``
+  |  |  **|**  | //Expr6// ``.`` //Ident//
   |  |  **|**  | //Ident//
   |  |  **|**  | //Integer//
   |  |  **|**  | //Double//

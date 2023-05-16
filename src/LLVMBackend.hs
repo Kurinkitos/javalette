@@ -133,9 +133,10 @@ cgDecl vType (NoInitVar ident) = mdo
         -- This is not nessesary in LLVM, but llvm-hs-pure emits the wrong types from gep so we need to cast
         lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 (ConstantOperand (C.Int 32 0))
+        store vOp 0 arrayPtr
       _ -> error "Malformed AST! Variable of dissalowed type"
 cgDecl vType (Init ident expr) = mdo
-    exprOp <- cgExpr expr
+    exprOp <- cgRValue expr
     vOp <- cgDecl' vType ident
     store vOp 0 exprOp
 
@@ -156,21 +157,10 @@ cgStm (BStmt (Block stms)) = mdo
 cgStm (Decl vType decls) = mdo
     _ <- mapM (cgDecl vType) decls
     return ()
-cgStm (Ass (LIdent ident) expr) = mdo
-    vOp <- lookupVar ident
-    exprOp <- cgExpr expr
-    store vOp 0 exprOp
-cgStm (Ass (LIndex ident iexpr) expr) = mdo
-    exprOp <- cgExpr expr
-    indexOp <- cgExpr iexpr
-    arrPtr <- lookupVar ident
-    arrOp <- load arrPtr 0
-    indexAddr <- gep arrOp 
-        [ConstantOperand (C.Int 32 0) -- Get the structure pointer
-        , ConstantOperand (C.Int 32 1) -- Get the array from the structure
-        , indexOp -- Finally index the array
-        ]
-    store indexAddr 0 exprOp
+cgStm (Ass lExpr rExpr) = mdo
+    lOp <- cgLValue lExpr
+    rOp <- cgRValue rExpr
+    store lOp 0 rOp
 
 cgStm (Incr ident) = mdo
     vOp <- lookupVar ident
@@ -183,11 +173,11 @@ cgStm (Decr ident) = mdo
     vInc <- add vVal (ConstantOperand (C.Int 32 (-1)))
     store vOp 0 vInc
 cgStm (Javalette.Abs.Ret expr) = mdo
-    rOp <- cgExpr expr
+    rOp <- cgRValue expr
     ret rOp
 cgStm VRet = retVoid
 cgStm (Cond expr stms) = mdo
-    expOp <- cgExpr expr
+    expOp <- cgRValue expr
     condBr expOp tBlock fBlock
     tBlock <- block `named` "true"
     cgStm stms
@@ -202,7 +192,7 @@ cgStm (Cond expr stms) = mdo
     return ()
 
 cgStm (CondElse expr tStms fStms) = mdo
-    expOp <- cgExpr expr
+    expOp <- cgRValue expr
     condBr expOp tBlock fBlock
     tBlock <- block `named` "true"
     cgStm tStms
@@ -227,7 +217,7 @@ cgStm (CondElse expr tStms fStms) = mdo
 cgStm (While expr stms) = mdo
     br condL
     condL <- block `named` "condition"
-    condOp <- cgExpr expr
+    condOp <- cgRValue expr
     condBr condOp loopBody endL
     loopBody <- block `named` "loopBody"
     cgStm stms
@@ -249,7 +239,7 @@ cgStm (For elemType itVarIdent arrExpr stms) = mdo
     itCount <- alloca (encodeType Int) Nothing 0
     store itCount 0 (ConstantOperand (C.Int 32 0))
     -- Get array length
-    arrOp <- cgExpr arrExpr 
+    arrOp <- cgRValue arrExpr 
     --arrOp <- load arrPtr 0
     lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
     arrayLength <- load lengthAddr 0
@@ -273,37 +263,48 @@ cgStm (For elemType itVarIdent arrExpr stms) = mdo
 
 
 cgStm (SExp expr) = mdo
-    _ <- cgExpr expr
+    _ <- cgRValue expr
     return ()
 
-cgExpr :: Expr -> CgMonad Operand
-cgExpr (ETyped eType expr) = case expr of
+-- If the expression if a LValue or RValue, 
+-- used to determine if the adress or value should be in the returned operand
+data ValueKind = LValue | RValue
+    deriving (Show, Eq, Enum)
+cgLValue :: Expr -> CgMonad Operand
+cgLValue = cgExpr LValue
+cgRValue :: Expr -> CgMonad Operand
+cgRValue = cgExpr RValue
+
+cgExpr :: ValueKind -> Expr -> CgMonad Operand
+cgExpr valueKind (ETyped eType expr) = case expr of
     ETyped _ _iexpr -> error "Malformed AST! Nested Etyped"
     EVar ident -> mdo
         varPtr <- lookupVar ident
-        load varPtr 0
+        case valueKind of
+          LValue -> return varPtr
+          RValue -> load varPtr 0
     ELitInt i -> return $ ConstantOperand (C.Int 32 i)
     ELitDoub d -> return $ ConstantOperand (C.Float (F.Double d))
     ELitTrue -> return $ ConstantOperand (C.Int 1 1)
     ELitFalse -> return $ ConstantOperand (C.Int 1 0)
     EApp fIdent exprs -> mdo
-        fOps <- mapM cgExpr exprs
+        fOps <- mapM (cgExpr RValue) exprs
         fPtr <- lookupFunction fIdent
         call fPtr (encodeFunOperands fOps)
     EString _str -> mdo -- String literals is handled in a special case since it is not a type
         error "Unreachable!"
     Neg sexpr -> mdo
-        expOp <- cgExpr sexpr
+        expOp <- cgExpr RValue sexpr
         case eType of
           Int -> mul expOp (ConstantOperand (C.Int 32 (-1)))
           Doub -> fmul expOp (ConstantOperand (C.Float (F.Double (-1.0))))
           _ -> error "Malformed AST! Trying to negate non number"
     Not sexpr -> mdo
-        sexpOp <- cgExpr sexpr
+        sexpOp <- cgExpr RValue sexpr
         select sexpOp (ConstantOperand (C.Int 1 0)) (ConstantOperand (C.Int 1 1))
     EMul expr1 mulop expr2 -> mdo
-        expOp1 <- cgExpr expr1
-        expOp2 <- cgExpr expr2
+        expOp1 <- cgExpr RValue expr1
+        expOp2 <- cgExpr RValue expr2
         case eType of
             Doub -> case mulop of
               Times -> fmul expOp1 expOp2
@@ -314,8 +315,8 @@ cgExpr (ETyped eType expr) = case expr of
               Div -> sdiv expOp1 expOp2
               Mod -> srem expOp1 expOp2
     EAdd expr1 addop expr2 -> mdo
-        expOp1 <- cgExpr expr1
-        expOp2 <- cgExpr expr2
+        expOp1 <- cgExpr RValue expr1
+        expOp2 <- cgExpr RValue expr2
         case eType of
             Doub -> case addop of
               Plus -> fadd expOp1 expOp2
@@ -326,21 +327,21 @@ cgExpr (ETyped eType expr) = case expr of
     ERel expr1 relop expr2 -> case expr1 of
     -- Doubles need a float comp instruction
       ETyped Doub _sExp1 -> mdo
-        expOp1 <- cgExpr expr1
-        expOp2 <- cgExpr expr2
+        expOp1 <- cgExpr RValue expr1
+        expOp2 <- cgExpr RValue expr2
         fcmp (encodeFRelOp relop) expOp1 expOp2
       _ -> mdo
-        expOp1 <- cgExpr expr1
-        expOp2 <- cgExpr expr2
+        expOp1 <- cgExpr RValue expr1
+        expOp2 <- cgExpr RValue expr2
         icmp (encodeIRelOp relop) expOp1 expOp2
     EAnd expr1 expr2 -> mdo
         -- To make shortcutting work properly, and to describe it using the irbuilder there is gonna be some ugly stack storage here
         -- llvm-opt does remove all of it so it is not really a problem
         res_ptr <- alloca (encodeType Bool) Nothing 0
-        expr1Op <- cgExpr expr1
+        expr1Op <- cgExpr RValue expr1
         condBr expr1Op e1True falseL
         e1True <- block `named` "e1True"
-        expr2Op <- cgExpr expr2
+        expr2Op <- cgExpr RValue expr2
         condBr expr2Op trueL falseL
         trueL <- block `named` "trueL"
         store res_ptr 0 (ConstantOperand (C.Int 1 1))
@@ -353,10 +354,10 @@ cgExpr (ETyped eType expr) = case expr of
     EOr expr1 expr2 -> mdo
         -- Same deal here as with and, but with reversed logic
         res_ptr <- alloca (encodeType Bool) Nothing 0
-        expr1Op <- cgExpr expr1
+        expr1Op <- cgExpr RValue expr1
         condBr expr1Op trueL e1False
         e1False <- block `named` "e1False"
-        expr2Op <- cgExpr expr2
+        expr2Op <- cgExpr RValue expr2
         condBr expr2Op trueL falseL
         trueL <- block `named` "trueL"
         store res_ptr 0 (ConstantOperand (C.Int 1 1))
@@ -367,7 +368,7 @@ cgExpr (ETyped eType expr) = case expr of
         endL <- block `named` "end"
         load res_ptr 0
     ENew t sExpr -> mdo
-        nElements <- cgExpr sExpr
+        nElements <- cgExpr RValue sExpr
         let elemSize = C.sizeof (encodeType t)
         arraySize <- mul nElements (ConstantOperand elemSize)
         let intSize = C.sizeof (encodeType Int)
@@ -382,28 +383,30 @@ cgExpr (ETyped eType expr) = case expr of
         lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 nElements
         return arrayPtr
-    EIndex ident iExpr -> mdo
-        arrPtr <- lookupVar ident
-        arrOp <- load arrPtr 0
-        indexOp <- cgExpr iExpr
-        indexAddr <- gep arrOp 
+    EIndex aExpr iExpr -> mdo
+        arrPtr <- cgExpr RValue aExpr
+        indexOp <- cgExpr RValue iExpr
+        indexAddr <- gep arrPtr
             [ConstantOperand (C.Int 32 0) -- Get the structure pointer
             , ConstantOperand (C.Int 32 1) -- Get the array from the structure
             , indexOp -- Finally index the array
             ]
-        load indexAddr 0
+        case valueKind of
+          LValue -> load indexAddr 0
+          RValue -> return indexAddr
+
     ESelect aExpr (Ident "length") -> mdo
-        arrPtr <- cgExpr aExpr
+        arrPtr <- cgExpr RValue aExpr
         lengthAddr <- gep arrPtr [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
         load lengthAddr 0
     ESelect _sExpr _ident -> error "Only supports .length for now"
 
-cgExpr (EString str) = mdo
+cgExpr _ (EString str) = mdo
     let str_hash = BSS.toShort $ BSC.pack $ show $ hash str
     strName <- freshName str_hash
     strptr <- globalStringPtr str strName
     return $ ConstantOperand strptr
-cgExpr expr = error $ "Malformed AST! Expected eType, found " ++ show expr
+cgExpr _ expr = error $ "Malformed AST! Expected eType, found " ++ show expr
 
 encodeFRelOp :: RelOp -> FloatingPointPredicate
 encodeFRelOp op = case op of
