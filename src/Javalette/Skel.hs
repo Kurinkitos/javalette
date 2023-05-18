@@ -26,10 +26,16 @@ transProg x = case x of
 transTopDef :: Javalette.Abs.TopDef -> Result
 transTopDef x = case x of
   Javalette.Abs.FnDef type_ ident args blk -> failure x
+  Javalette.Abs.TypeDef ident1 ident2 -> failure x
+  Javalette.Abs.StructDef ident mems -> failure x
 
 transArg :: Javalette.Abs.Arg -> Result
 transArg x = case x of
   Javalette.Abs.Argument type_ ident -> failure x
+
+transMem :: Javalette.Abs.Mem -> Result
+transMem x = case x of
+  Javalette.Abs.Member type_ ident -> failure x
 
 transBlk :: Javalette.Abs.Blk -> Result
 transBlk x = case x of
@@ -63,13 +69,15 @@ transType x = case x of
   Javalette.Abs.Doub -> failure x
   Javalette.Abs.Bool -> failure x
   Javalette.Abs.Void -> failure x
+  Javalette.Abs.DefType ident -> failure x
   Javalette.Abs.Fun type_ types -> failure x
 
 transExpr :: Javalette.Abs.Expr -> Result
 transExpr x = case x of
   Javalette.Abs.ETyped type_ expr -> failure x
-  Javalette.Abs.ENew type_ expr -> failure x
+  Javalette.Abs.ENew nitem -> failure x
   Javalette.Abs.EIndex expr1 expr2 -> failure x
+  Javalette.Abs.EDeref expr ident -> failure x
   Javalette.Abs.ESelect expr ident -> failure x
   Javalette.Abs.EVar ident -> failure x
   Javalette.Abs.ELitInt integer -> failure x
@@ -85,6 +93,11 @@ transExpr x = case x of
   Javalette.Abs.ERel expr1 relop expr2 -> failure x
   Javalette.Abs.EAnd expr1 expr2 -> failure x
   Javalette.Abs.EOr expr1 expr2 -> failure x
+
+transNItem :: Javalette.Abs.NItem -> Result
+transNItem x = case x of
+  Javalette.Abs.NewArray type_ expr -> failure x
+  Javalette.Abs.NewStruct type_ -> failure x
 
 transAddOp :: Javalette.Abs.AddOp -> Result
 transAddOp x = case x of

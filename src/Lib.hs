@@ -11,7 +11,7 @@ import Javalette.Lex   ( Token, mkPosToken )
 import Javalette.Print ( Print, printTree )
 import Javalette.Skel  ()
 
-import Typecheck ( typecheck, FunctionSig)
+import Typecheck ( typecheck, Symbols)
 import Javalette.Abs (Prog, Ident)
 import LLVMBackend (compile)
 import qualified Data.Map as Map
@@ -28,18 +28,18 @@ compileProgram program v =
     Right ast ->
       case typecheck ast of
         Left err -> do
+          showTree v ast
           hPutStrLn stderr "TYPE ERROR"
           hPutStrLn stderr err
-          showTree v ast
           exitFailure
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
           showTree v prog
           compileProgram' prog fsigs
 
-compileProgram' :: Prog -> Map.Map Ident FunctionSig -> IO ()
-compileProgram' program fsigs = do
-  let llvm_ir = compile program fsigs
+compileProgram' :: Prog -> Symbols -> IO ()
+compileProgram' program symbols = do
+  let llvm_ir = compile program symbols
   putStr llvm_ir
 
 -- Debug functions

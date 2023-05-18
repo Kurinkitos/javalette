@@ -6,7 +6,7 @@ module LLVMBackend (
 ) where
 import Javalette.Abs
 import qualified Data.Map as Map
-import Typecheck (FunctionSig (FunctionSig))
+import Typecheck (Symbols (functions, structs, typeDefs), FunctionSig (FunctionSig))
 import Data.Text.Lazy (unpack)
 
 import Data.ByteString.Short as BSS
@@ -30,7 +30,7 @@ import LLVM.AST.FloatingPointPredicate (FloatingPointPredicate (OLT, OLE, OGT, O
 import LLVM.AST.IntegerPredicate (IntegerPredicate (SLT, SLE, SGT, SGE, EQ, NE))
 
 
-compile :: Prog -> Map.Map Ident FunctionSig -> String
+compile :: Prog -> Symbols -> String
 compile program fsigs = Data.Text.Lazy.unpack $ ppllvm m
     where
         m = codegen program fsigs
@@ -39,10 +39,10 @@ type CgMonad a = CgRSWT (IRBuilderT ModuleBuilder) a
 -- Stack of Maps from JL identifiers to LLVM names
 type CgRSWT = RWST (Map.Map Ident Operand) () [Map.Map Ident Operand]
 
-codegen :: Prog -> Map.Map Ident FunctionSig -> Module
-codegen (Program tds) fsigs = buildModule "Javalette" $ mdo
+codegen :: Prog -> Symbols -> Module
+codegen (Program tds) symbols = buildModule "Javalette" $ mdo
     builtIns <- cgBuiltinDefs
-    fndefs <- pushFnDefs (Map.toList fsigs)
+    fndefs <- pushFnDefs (Map.toList (functions symbols))
     mapM (cgFun (Map.fromList (builtIns ++ fndefs))) tds
 
 cgBuiltinDefs :: ModuleBuilder [(Ident, Operand)]
@@ -367,7 +367,7 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         br endL
         endL <- block `named` "end"
         load res_ptr 0
-    ENew t sExpr -> mdo
+    ENew (NewArray t sExpr) -> mdo
         nElements <- cgExpr RValue sExpr
         let elemSize = C.sizeof (encodeType t)
         arraySize <- mul nElements (ConstantOperand elemSize)
@@ -383,6 +383,7 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 nElements
         return arrayPtr
+    ENew (NewStruct ident) -> undefined
     EIndex aExpr iExpr -> mdo
         arrPtr <- cgExpr RValue aExpr
         indexOp <- cgExpr RValue iExpr
@@ -394,6 +395,7 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         case valueKind of
           RValue -> load indexAddr 0
           LValue -> return indexAddr
+    EDeref ptrExpr ident -> undefined
 
     ESelect aExpr (Ident "length") -> mdo
         arrPtr <- cgExpr RValue aExpr

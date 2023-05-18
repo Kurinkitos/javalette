@@ -147,6 +147,8 @@ instance Print Javalette.Abs.Prog where
 instance Print Javalette.Abs.TopDef where
   prt i = \case
     Javalette.Abs.FnDef type_ id_ args blk -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 blk])
+    Javalette.Abs.TypeDef id_1 id_2 -> prPrec i 0 (concatD [doc (showString "typedef"), doc (showString "struct"), prt 0 id_1, doc (showString "*"), prt 0 id_2, doc (showString ";")])
+    Javalette.Abs.StructDef id_ mems -> prPrec i 0 (concatD [doc (showString "struct"), prt 0 id_, doc (showString "{"), prt 0 mems, doc (showString "}"), doc (showString ";")])
 
 instance Print [Javalette.Abs.TopDef] where
   prt _ [] = concatD []
@@ -161,6 +163,15 @@ instance Print [Javalette.Abs.Arg] where
   prt _ [] = concatD []
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
+
+instance Print Javalette.Abs.Mem where
+  prt i = \case
+    Javalette.Abs.Member type_ id_ -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString ";")])
+
+instance Print [Javalette.Abs.Mem] where
+  prt _ [] = concatD []
+  prt _ [x] = concatD [prt 0 x]
+  prt _ (x:xs) = concatD [prt 0 x, prt 0 xs]
 
 instance Print Javalette.Abs.Blk where
   prt i = \case
@@ -198,11 +209,12 @@ instance Print [Javalette.Abs.Item] where
 
 instance Print Javalette.Abs.Type where
   prt i = \case
-    Javalette.Abs.Array type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "["), doc (showString "]")])
+    Javalette.Abs.Array type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
     Javalette.Abs.Int -> prPrec i 0 (concatD [doc (showString "int")])
     Javalette.Abs.Doub -> prPrec i 0 (concatD [doc (showString "double")])
     Javalette.Abs.Bool -> prPrec i 0 (concatD [doc (showString "boolean")])
     Javalette.Abs.Void -> prPrec i 0 (concatD [doc (showString "void")])
+    Javalette.Abs.DefType id_ -> prPrec i 0 (concatD [prt 0 id_])
     Javalette.Abs.Fun type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
 
 instance Print [Javalette.Abs.Type] where
@@ -213,8 +225,9 @@ instance Print [Javalette.Abs.Type] where
 instance Print Javalette.Abs.Expr where
   prt i = \case
     Javalette.Abs.ETyped type_ expr -> prPrec i 9 (concatD [prt 0 type_, doc (showString "::"), prt 8 expr])
-    Javalette.Abs.ENew type_ expr -> prPrec i 7 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
+    Javalette.Abs.ENew nitem -> prPrec i 7 (concatD [doc (showString "new"), prt 0 nitem])
     Javalette.Abs.EIndex expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
+    Javalette.Abs.EDeref expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "->"), prt 0 id_])
     Javalette.Abs.ESelect expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_])
     Javalette.Abs.EVar id_ -> prPrec i 6 (concatD [prt 0 id_])
     Javalette.Abs.ELitInt n -> prPrec i 6 (concatD [prt 0 n])
@@ -235,6 +248,11 @@ instance Print [Javalette.Abs.Expr] where
   prt _ [] = concatD []
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
+
+instance Print Javalette.Abs.NItem where
+  prt i = \case
+    Javalette.Abs.NewArray type_ expr -> prPrec i 0 (concatD [prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
+    Javalette.Abs.NewStruct type_ -> prPrec i 0 (concatD [prt 0 type_])
 
 instance Print Javalette.Abs.AddOp where
   prt i = \case

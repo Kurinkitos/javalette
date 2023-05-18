@@ -38,16 +38,18 @@ The set of reserved words is the set of terminals appearing in the grammar. Thos
 The reserved words used in Javalette are the following:
   | ``boolean`` | ``double`` | ``else`` | ``false``
   | ``for`` | ``if`` | ``int`` | ``new``
-  | ``return`` | ``true`` | ``void`` | ``while``
+  | ``return`` | ``struct`` | ``true`` | ``typedef``
+  | ``void`` | ``while`` |  |
 
 The symbols used in Javalette are the following:
-  | ( | ) | , | {
-  | } | ; | = | ++
-  | -- | : | [ | ]
-  | . | - | ! | &&
-  | || | + | * | /
-  | % | < | <= | >
-  | >= | == | != |
+  | ( | ) | * | ;
+  | { | } | , | =
+  | ++ | -- | : | []
+  | [ | ] | -> | .
+  | - | ! | && | ||
+  | + | / | % | <
+  | <= | > | >= | ==
+  | != |  |  |
 
 ===Comments===
 Single-line comments begin with #, //.Multiple-line comments are  enclosed with /* and */.
@@ -60,12 +62,17 @@ All other symbols are terminals.
 
   | //Prog// | -> | //[TopDef]//
   | //TopDef// | -> | //Type// //Ident// ``(`` //[Arg]// ``)`` //Blk//
+  |  |  **|**  | ``typedef`` ``struct`` //Ident// ``*`` //Ident// ``;``
+  |  |  **|**  | ``struct`` //Ident// ``{`` //[Mem]// ``}`` ``;``
   | //[TopDef]// | -> | //TopDef//
   |  |  **|**  | //TopDef// //[TopDef]//
   | //Arg// | -> | //Type// //Ident//
   | //[Arg]// | -> | **eps**
   |  |  **|**  | //Arg//
   |  |  **|**  | //Arg// ``,`` //[Arg]//
+  | //Mem// | -> | //Type// //Ident// ``;``
+  | //[Mem]// | -> | //Mem//
+  |  |  **|**  | //Mem// //[Mem]//
   | //Blk// | -> | ``{`` //[Stmt]// ``}``
   | //[Stmt]// | -> | **eps**
   |  |  **|**  | //Stmt// //[Stmt]//
@@ -86,17 +93,19 @@ All other symbols are terminals.
   |  |  **|**  | //Ident// ``=`` //Expr//
   | //[Item]// | -> | //Item//
   |  |  **|**  | //Item// ``,`` //[Item]//
-  | //Type// | -> | //Type// ``[`` ``]``
+  | //Type// | -> | //Type// ``[]``
   |  |  **|**  | ``int``
   |  |  **|**  | ``double``
   |  |  **|**  | ``boolean``
   |  |  **|**  | ``void``
+  |  |  **|**  | //Ident//
   | //[Type]// | -> | **eps**
   |  |  **|**  | //Type//
   |  |  **|**  | //Type// ``,`` //[Type]//
-  | //Expr7// | -> | ``new`` //Type// ``[`` //Expr// ``]``
+  | //Expr7// | -> | ``new`` //NItem//
   |  |  **|**  | //Expr8//
   | //Expr6// | -> | //Expr6// ``[`` //Expr// ``]``
+  |  |  **|**  | //Expr6// ``->`` //Ident//
   |  |  **|**  | //Expr6// ``.`` //Ident//
   |  |  **|**  | //Ident//
   |  |  **|**  | //Integer//
@@ -124,6 +133,8 @@ All other symbols are terminals.
   | //[Expr]// | -> | **eps**
   |  |  **|**  | //Expr//
   |  |  **|**  | //Expr// ``,`` //[Expr]//
+  | //NItem// | -> | //Type// ``[`` //Expr// ``]``
+  |  |  **|**  | //Type//
   | //AddOp// | -> | ``+``
   |  |  **|**  | ``-``
   | //MulOp// | -> | ``*``

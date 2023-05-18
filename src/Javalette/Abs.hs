@@ -13,10 +13,16 @@ import qualified Data.String
 data Prog = Program [TopDef]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data TopDef = FnDef Type Ident [Arg] Blk
+data TopDef
+    = FnDef Type Ident [Arg] Blk
+    | TypeDef Ident Ident
+    | StructDef Ident [Mem]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Arg = Argument Type Ident
+  deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+data Mem = Member Type Ident
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Blk = Block [Stmt]
@@ -41,13 +47,21 @@ data Stmt
 data Item = NoInitVar Ident | Init Ident Expr
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data Type = Array Type | Int | Doub | Bool | Void | Fun Type [Type]
+data Type
+    = Array Type
+    | Int
+    | Doub
+    | Bool
+    | Void
+    | DefType Ident
+    | Fun Type [Type]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Expr
     = ETyped Type Expr
-    | ENew Type Expr
+    | ENew NItem
     | EIndex Expr Expr
+    | EDeref Expr Ident
     | ESelect Expr Ident
     | EVar Ident
     | ELitInt Integer
@@ -63,6 +77,9 @@ data Expr
     | ERel Expr RelOp Expr
     | EAnd Expr Expr
     | EOr Expr Expr
+  deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+data NItem = NewArray Type Expr | NewStruct Type
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data AddOp = Plus | Minus

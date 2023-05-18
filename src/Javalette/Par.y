@@ -35,33 +35,37 @@ import Javalette.Lex
   ','       { PT _ (TS _ 10) }
   '-'       { PT _ (TS _ 11) }
   '--'      { PT _ (TS _ 12) }
-  '.'       { PT _ (TS _ 13) }
-  '/'       { PT _ (TS _ 14) }
-  ':'       { PT _ (TS _ 15) }
-  ';'       { PT _ (TS _ 16) }
-  '<'       { PT _ (TS _ 17) }
-  '<='      { PT _ (TS _ 18) }
-  '='       { PT _ (TS _ 19) }
-  '=='      { PT _ (TS _ 20) }
-  '>'       { PT _ (TS _ 21) }
-  '>='      { PT _ (TS _ 22) }
-  '['       { PT _ (TS _ 23) }
-  ']'       { PT _ (TS _ 24) }
-  'boolean' { PT _ (TS _ 25) }
-  'double'  { PT _ (TS _ 26) }
-  'else'    { PT _ (TS _ 27) }
-  'false'   { PT _ (TS _ 28) }
-  'for'     { PT _ (TS _ 29) }
-  'if'      { PT _ (TS _ 30) }
-  'int'     { PT _ (TS _ 31) }
-  'new'     { PT _ (TS _ 32) }
-  'return'  { PT _ (TS _ 33) }
-  'true'    { PT _ (TS _ 34) }
-  'void'    { PT _ (TS _ 35) }
-  'while'   { PT _ (TS _ 36) }
-  '{'       { PT _ (TS _ 37) }
-  '||'      { PT _ (TS _ 38) }
-  '}'       { PT _ (TS _ 39) }
+  '->'      { PT _ (TS _ 13) }
+  '.'       { PT _ (TS _ 14) }
+  '/'       { PT _ (TS _ 15) }
+  ':'       { PT _ (TS _ 16) }
+  ';'       { PT _ (TS _ 17) }
+  '<'       { PT _ (TS _ 18) }
+  '<='      { PT _ (TS _ 19) }
+  '='       { PT _ (TS _ 20) }
+  '=='      { PT _ (TS _ 21) }
+  '>'       { PT _ (TS _ 22) }
+  '>='      { PT _ (TS _ 23) }
+  '['       { PT _ (TS _ 24) }
+  '[]'      { PT _ (TS _ 25) }
+  ']'       { PT _ (TS _ 26) }
+  'boolean' { PT _ (TS _ 27) }
+  'double'  { PT _ (TS _ 28) }
+  'else'    { PT _ (TS _ 29) }
+  'false'   { PT _ (TS _ 30) }
+  'for'     { PT _ (TS _ 31) }
+  'if'      { PT _ (TS _ 32) }
+  'int'     { PT _ (TS _ 33) }
+  'new'     { PT _ (TS _ 34) }
+  'return'  { PT _ (TS _ 35) }
+  'struct'  { PT _ (TS _ 36) }
+  'true'    { PT _ (TS _ 37) }
+  'typedef' { PT _ (TS _ 38) }
+  'void'    { PT _ (TS _ 39) }
+  'while'   { PT _ (TS _ 40) }
+  '{'       { PT _ (TS _ 41) }
+  '||'      { PT _ (TS _ 42) }
+  '}'       { PT _ (TS _ 43) }
   L_Ident   { PT _ (TV $$)   }
   L_doubl   { PT _ (TD $$)   }
   L_integ   { PT _ (TI $$)   }
@@ -87,6 +91,8 @@ Prog : ListTopDef { Javalette.Abs.Program $1 }
 TopDef :: { Javalette.Abs.TopDef }
 TopDef
   : Type Ident '(' ListArg ')' Blk { Javalette.Abs.FnDef $1 $2 $4 $6 }
+  | 'typedef' 'struct' Ident '*' Ident ';' { Javalette.Abs.TypeDef $3 $5 }
+  | 'struct' Ident '{' ListMem '}' ';' { Javalette.Abs.StructDef $2 $4 }
 
 ListTopDef :: { [Javalette.Abs.TopDef] }
 ListTopDef : TopDef { (:[]) $1 } | TopDef ListTopDef { (:) $1 $2 }
@@ -99,6 +105,12 @@ ListArg
   : {- empty -} { [] }
   | Arg { (:[]) $1 }
   | Arg ',' ListArg { (:) $1 $3 }
+
+Mem :: { Javalette.Abs.Mem }
+Mem : Type Ident ';' { Javalette.Abs.Member $1 $2 }
+
+ListMem :: { [Javalette.Abs.Mem] }
+ListMem : Mem { (:[]) $1 } | Mem ListMem { (:) $1 $2 }
 
 Blk :: { Javalette.Abs.Blk }
 Blk : '{' ListStmt '}' { Javalette.Abs.Block $2 }
@@ -132,11 +144,12 @@ ListItem : Item { (:[]) $1 } | Item ',' ListItem { (:) $1 $3 }
 
 Type :: { Javalette.Abs.Type }
 Type
-  : Type '[' ']' { Javalette.Abs.Array $1 }
+  : Type '[]' { Javalette.Abs.Array $1 }
   | 'int' { Javalette.Abs.Int }
   | 'double' { Javalette.Abs.Doub }
   | 'boolean' { Javalette.Abs.Bool }
   | 'void' { Javalette.Abs.Void }
+  | Ident { Javalette.Abs.DefType $1 }
 
 ListType :: { [Javalette.Abs.Type] }
 ListType
@@ -145,13 +158,12 @@ ListType
   | Type ',' ListType { (:) $1 $3 }
 
 Expr7 :: { Javalette.Abs.Expr }
-Expr7
-  : 'new' Type '[' Expr ']' { Javalette.Abs.ENew $2 $4 }
-  | Expr8 { $1 }
+Expr7 : 'new' NItem { Javalette.Abs.ENew $2 } | Expr8 { $1 }
 
 Expr6 :: { Javalette.Abs.Expr }
 Expr6
   : Expr6 '[' Expr ']' { Javalette.Abs.EIndex $1 $3 }
+  | Expr6 '->' Ident { Javalette.Abs.EDeref $1 $3 }
   | Expr6 '.' Ident { Javalette.Abs.ESelect $1 $3 }
   | Ident { Javalette.Abs.EVar $1 }
   | Integer { Javalette.Abs.ELitInt $1 }
@@ -198,6 +210,11 @@ ListExpr
   : {- empty -} { [] }
   | Expr { (:[]) $1 }
   | Expr ',' ListExpr { (:) $1 $3 }
+
+NItem :: { Javalette.Abs.NItem }
+NItem
+  : Type '[' Expr ']' { Javalette.Abs.NewArray $1 $3 }
+  | Type { Javalette.Abs.NewStruct $1 }
 
 AddOp :: { Javalette.Abs.AddOp }
 AddOp : '+' { Javalette.Abs.Plus } | '-' { Javalette.Abs.Minus }

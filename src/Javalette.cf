@@ -6,11 +6,19 @@ Program.   Prog ::= [TopDef] ;
 
 FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Blk ;
 
+TypeDef.   TopDef ::= "typedef" "struct" Ident "*" Ident ";" ;
+
+StructDef. TopDef ::= "struct" Ident "{" [Mem] "}" ";" ;
+
 separator nonempty TopDef "" ;
 
 Argument.  Arg ::= Type Ident;
 
 separator  Arg "," ;
+
+Member.    Mem ::= Type Ident ";" ;
+
+separator  nonempty Mem "" ;
 
 -- statements ----------------------------------------------
 
@@ -52,7 +60,8 @@ SExp.      Stmt ::= Expr  ";" ;
 
 -- Types ---------------------------------------------------
 
-Array.     Type ::= Type "[" "]" ;
+-- Somewhat ungly hack to try and get rid of conflicts from Type ::= Ident
+Array.     Type ::= Type "[]" ;
 
 Int.       Type ::= "int" ;
 
@@ -61,6 +70,9 @@ Doub.      Type ::= "double" ;
 Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
+
+DefType.   Type ::= Ident ;
+
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
@@ -72,12 +84,13 @@ separator  Type "," ;
 -- Typed expression to be used in typechecking, not part of the language
 internal ETyped.    Expr9 ::= Type "::" Expr8;
 
-
-ENew.      Expr7 ::= "new" Type "[" Expr "]" ;
+ENew.      Expr7 ::= "new" NItem ;
 
 EIndex.    Expr6 ::= Expr6 "[" Expr "]" ;
 
--- Currently just for length, but will be used for structures as well
+EDeref.    Expr6 ::= Expr6 "->" Ident ;
+
+-- Currently just for length, but could be used for structures as well
 ESelect.   Expr6 ::= Expr6 "." Ident ;
 
 EVar.      Expr6 ::= Ident ;
@@ -111,6 +124,12 @@ EOr.       Expr ::= Expr1 "||" Expr ;
 coercions  Expr 9 ;
 
 separator  Expr "," ;
+
+-- New Targets
+
+NewArray.  NItem ::= Type "[" Expr "]" ;
+
+NewStruct. NItem ::= Type;
 
 -- operators -----------------------------------------------
 

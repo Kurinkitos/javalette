@@ -1,6 +1,7 @@
 module Typecheck (
         typecheck,
-        FunctionSig (FunctionSig)
+        Symbols(functions, structs, typeDefs),
+        FunctionSig(FunctionSig)
     ) where
 
 import Javalette.Abs
@@ -13,28 +14,51 @@ import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
 import Data.Either (lefts, rights)
 
--- The list of maps represents variables, forming a stack to permit shadowing
 data FunctionSig = FunctionSig Type [Type]
     deriving Show
-type SymbolsRWS = RWS (Map.Map Ident FunctionSig) () [Map.Map Ident Type]
+type Structure = (Map.Map Ident Type)
+type TDef = Ident
+
+-- The list of maps represents variables, forming a stack to permit shadowing
+type SymbolsRWS = RWS Symbols () [Map.Map Ident Type]
 type TCExceptRWS = ExceptT String SymbolsRWS
+data Symbols = Symbols
+    { functions :: Map.Map Ident FunctionSig
+    , structs :: Map.Map Ident Structure
+    , typeDefs :: Map.Map Ident TDef
+    }
 
 
-typecheck :: Prog -> Either String (Prog, Map.Map Ident FunctionSig)
+typecheck :: Prog -> Either String (Prog, Symbols)
 typecheck (Program [])     = Left "No function definitions found"
 typecheck prog@(Program topdefs) = case initFunctionSigs prog of
     Left err -> Left err
-    Right fsigs -> case lefts checkedFuns of
-        []  -> Right (Program (rights checkedFuns), fsigsWithoutPrimitives)
+    Right fsigs -> case lefts checkedTds of
+        []  -> Right (Program (rights checkedTds), symbols)
         ers -> Left (unlines ers)
         where
-            fsigsWithoutPrimitives = Map.difference fsigs $ Map.fromList primitiveFunctions
-            checkedFuns = map (fst . checkFun) topdefs
-            checkFun td = evalRWS (runExceptT (typecheckFunction td)) fsigs [functionArgTypes td]
+            checkedTds = checkedFns ++ checkedTypeDefs ++ checkedStructs
+            checkedFns = map (fst . checkFns) fnTds
+            checkedTypeDefs = map (fst . checkTypeDef) typeDefTds
+            checkedStructs = map (fst . checkStruct) structTds
+            checkFns fn = evalRWS (runExceptT (typecheckFunction fn)) symbols [functionArgTypes fn]
+            checkTypeDef td = evalRWS (runExceptT (typecheckTypeDef td)) symbols []
+            checkStruct strc = evalRWS (runExceptT (typecheckStruct strc)) symbols []
+            fnTds = [ fn | fn@FnDef {} <- topdefs]
+            typeDefTds = [ td | td@TypeDef {} <- topdefs]
+            structTds = [ strc | strc@StructDef {} <- topdefs]
+            symbols = Symbols {
+                functions = fsigs,
+                structs = Map.empty,
+                typeDefs = Map.empty
+            }
+
+
 
 
 functionArgTypes :: TopDef -> Map.Map Ident Type
 functionArgTypes (FnDef _ _ args _) = Map.fromList (functionArgTypes' args)
+functionArgTypes _ = error "functionArgTypes called on non FnDef topdef"
 
 functionArgTypes' :: [Arg] -> [(Ident, Type)]
 functionArgTypes' [] = []
@@ -46,10 +70,10 @@ initFunctionSigs (Program defs) = case repeated fidents of
             Nothing -> Left "No main function!"
             Just (FunctionSig Int []) -> Right funs
             Just _ -> Left "Main function has wrong signature!"
-        (ident:_) -> Left ("Function " ++ show ident ++ " defined multiple times")
+        (ident:_) -> Left ("Topdef " ++ show ident ++ " defined multiple times")
     where
         funs = Map.fromList fsigs
-        fsigs = primitiveFunctions ++ initSymbols' defs
+        fsigs = primitiveFunctions ++ initFunctionSigs' defs
         fidents = map fst fsigs
 
 primitiveFunctions :: [(Ident, FunctionSig)]
@@ -60,15 +84,36 @@ primitiveFunctions = [
     (Ident "readDouble", FunctionSig Doub [])
     ]
 
-initSymbols' :: [TopDef] -> [(Ident, FunctionSig)]
-initSymbols' []     = []
-initSymbols' ((FnDef retType ident args _):tds) = (ident, FunctionSig retType argTypes) : ss
+initFunctionSigs' :: [TopDef] -> [(Ident, FunctionSig)]
+initFunctionSigs' []     = []
+initFunctionSigs' ((FnDef retType ident args _):tds) =
+    (ident, FunctionSig retType argTypes) : initFunctionSigs' tds
     where
         argTypes = map argToType args
-        ss = initSymbols' tds
+initFunctionSigs' (_:tds) = initFunctionSigs' tds
+
+initStructures :: [TopDef] -> [(Ident, Structure)]
+initStructures [] = []
+initStructures ((StructDef ident mems):tds) = (ident, initStructMems mems) : initStructures tds
+    where
+        initStructMems mms = Map.fromList (map initStructMem mms)
+        initStructMem (Member mType mIdent) = (mIdent, mType)
+initStructures (_:tds) = initStructures tds
+
+initTypeDefs :: [TopDef] -> [(Ident, TDef)]
+initTypeDefs [] = []
+initTypeDefs ((TypeDef srcType newName):tds) = (newName, srcType) : initTypeDefs tds
+initTypeDefs (_:tds) = initTypeDefs tds
+
 
 argToType :: Arg -> Type
 argToType (Argument t _) = t
+
+typecheckTypeDef :: TopDef -> TCExceptRWS TopDef
+typecheckTypeDef = undefined
+
+typecheckStruct :: TopDef -> TCExceptRWS TopDef
+typecheckStruct = undefined
 
 -- I'm checking that the function returns separate from the main pass. 
 -- It's a lot slower but simplifies the functions
@@ -79,6 +124,7 @@ typecheckFunction topdef@(FnDef Void _id _args _blk) = do
 typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsReturn stms
     then typecheckFunction' topdef
     else throwE "Function is not guaranteed to return a value"
+typecheckFunction _ = throwE "typecheckFunction called on non function!"
 
 
 typecheckFunction' :: TopDef -> TCExceptRWS TopDef
@@ -89,6 +135,7 @@ typecheckFunction' (FnDef retType ident args (Block stms)) = do
             FnDef retType ident args . Block <$> checkedStms
     where
         checkedStms = mapM (typecheckStatement retType) stms
+typecheckFunction' _ = throwE "typecheckFunction' Called on non Function!"
 
 -- Make implicit returns explicit
 implicitReturn :: TopDef -> TCExceptRWS TopDef
@@ -247,12 +294,15 @@ typecheckExpression Bool (EOr e1 e2) = do
     checkedE2 <- typecheckExpression Bool e2
     return $ ETyped Bool $ EOr checkedE1 checkedE2
 typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
-typecheckExpression eType (ENew aType sExpr) =
+typecheckExpression eType (ENew (NewArray aType sExpr)) =
     if Array aType == eType then do
         checkedExpr <- typecheckExpression Int sExpr
-        return $ ETyped (Array aType) (ENew aType checkedExpr)
+        return $ ETyped (Array aType) (ENew (NewArray aType checkedExpr))
     else do
         throwE $ "Trying to assign a new array of " ++ show aType ++ "s to variable of type " ++ show eType
+typecheckExpression eType (ENew (NewStruct sType)) = undefined
+
+typecheckExpression eType (EDeref ptrExpr ident) = undefined
 
 --
 typecheckExpression Int e@(ESelect aExpr (Ident "length")) = do
@@ -271,9 +321,12 @@ elementType :: Type -> TCExceptRWS Type
 elementType (Array eType) = return eType
 elementType typ = throwE $ "elementType called on " ++ show typ
 
+-- This function is a workaround for how I made the typecheckExpression function, 
+-- it is very slow compared to real type inference since it just tries all types instead
 inferType :: Expr -> TCExceptRWS Type
 inferType expr = do
-    res <- mapM checkExpr types
+    userTypes <- getAllUserTypes
+    res <- mapM checkExpr (types ++ userTypes)
     case rights res of
         [] -> throwE $ "INTERNAL ERROR: No type matches that of expression " ++ show expr ++ " errors: " ++ unlines (map show (lefts res) )
         [ETyped t _] -> return t
@@ -285,7 +338,6 @@ inferType expr = do
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (liftM Right m) (return . Left)
 
--- A little map trick to make a list of all types, followed by arrays of all possible types
 types :: [Type]
 types = [Void] ++ baseTypes ++ arrayTypes
 
@@ -294,6 +346,12 @@ baseTypes = [Int, Doub, Bool]
 
 arrayTypes :: [Type]
 arrayTypes = map Array baseTypes
+
+getAllUserTypes :: TCExceptRWS [Type]
+getAllUserTypes = do
+    symbols <- lift ask
+    let keys = Map.keys (typeDefs symbols)
+    return $ map DefType keys
 
 checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
 -- printString needs special handeling since String is not a type in Javalette
@@ -310,11 +368,25 @@ checkFunCall eType fIdent args = do
             zipWithM typecheckExpression argTypes args
 
 
+
 getFunSig :: Ident -> TCExceptRWS FunctionSig
 getFunSig fIdent = do
-    sigs <- lift ask
-    case Map.lookup fIdent sigs of
+    symbols <- lift ask
+    case Map.lookup fIdent (functions symbols) of
         Nothing -> throwE ("Call to undeclared function " ++ show fIdent)
+        Just fsig -> return fsig
+
+getTDType :: Ident -> TCExceptRWS TDef
+getTDType tdIdent = do
+    symbols <- lift ask
+    case Map.lookup tdIdent (typeDefs symbols) of
+        Nothing -> throwE ("Reference to non declared type " ++ show tdIdent)
+        Just fsig -> return fsig
+getStruct :: Ident -> TCExceptRWS Structure
+getStruct structIdent = do
+    symbols <- lift ask
+    case Map.lookup structIdent (structs symbols) of
+        Nothing -> throwE ("Reference to non declared type " ++ show structIdent)
         Just fsig -> return fsig
 
 -- Checks if all paths of a program return. Notably does not check type of the return or for situations like
