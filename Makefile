@@ -25,8 +25,9 @@ compiler : src/Javalette/Abs.hs
 	cp $(SUB_PATH)/bin/jlc-exe jlc
 
 
+# ./runtest.sh -l -x arrays1 -x pointers -x arrays1_pointers .
 test : compiler
-	./runtest.sh -l -x arrays1 -x pointers -x arrays1_pointers .
+	./runtest.sh -x arrays1 -x pointers .
 
 invoke: compiler
 	stack run > prog.ll

@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Typecheck (
         typecheck,
         Symbols(functions, structs, typeDefs),
@@ -159,10 +161,14 @@ typecheckStatement _ (Decl vType decls) = do
     checkedDeclarations <- mapM (typecheckDeclaration vType) decls
     return (Decl vType checkedDeclarations)
 typecheckStatement _ (Ass lExpr assExpr) = do
-    lType <- inferType lExpr
-    checkedLExpr <- typecheckExpression lType lExpr
-    checkedAssExpr <- typecheckExpression lType assExpr
-    return $ Ass checkedLExpr checkedAssExpr
+    checkedLExpr <- typecheckExpression lExpr
+    lType <- extractType checkedLExpr
+    checkedAssExpr <- typecheckExpression assExpr
+    assType <- extractType checkedAssExpr
+    if lType == assType then
+        return $ Ass checkedLExpr checkedAssExpr
+    else
+        throwE "Trying to assign an expression of the wrong type"
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -174,36 +180,56 @@ typecheckStatement _ (Decr ident) = do
         Int -> return (Decr ident)
         vt -> throwE $ "Can only decrement variables of type Int, found type" ++ show vt
 typecheckStatement rType (Ret expr) = do
-    checkedExpr <- typecheckExpression rType expr
-    return (Ret checkedExpr)
+    checkedExpr <- typecheckExpression expr
+    exprType <- extractType checkedExpr
+    if exprType == rType then
+        return (Ret checkedExpr)
+    else
+        throwE $ "Function should return a " ++ show rType ++ " but return called with a " ++ show exprType
 typecheckStatement rType VRet = case rType of
     Void -> return VRet
     _ -> throwE "Return without expression in non void function"
 typecheckStatement rType (Cond expr stm) = do
-    checkedExpr <- typecheckExpression Bool expr
+    checkedExpr <- typecheckExpression expr
     checkedStm <- typecheckStatement rType stm
     return (Cond checkedExpr checkedStm)
 typecheckStatement rType (CondElse expr stm1 stm2) = do
-    checkedExpr <- typecheckExpression Bool expr
+    checkedExpr <- typecheckExpression expr
     checkedStm1 <- typecheckStatement rType stm1
     checkedStm2 <- typecheckStatement rType stm2
     return (CondElse checkedExpr checkedStm1 checkedStm2)
 typecheckStatement rType (While expr stmt) = do
-    checkedExpr <- typecheckExpression Bool expr
-    checkedStm <- typecheckStatement rType stmt
-    return (While checkedExpr checkedStm)
+    checkedExpr <- typecheckExpression expr
+    exprType <- extractType checkedExpr
+    if exprType /= Bool then 
+        throwE "Expression in while has to be boolean"
+    else do
+        checkedStm <- typecheckStatement rType stmt
+        return (While checkedExpr checkedStm)
 typecheckStatement rType (For itType itIdent arr stmt) = do
     old_state <- lift get
     let forState = Map.fromList [(itIdent, itType)]
     lift $ put $ forState:old_state
-    checkedExpr <- typecheckExpression (Array itType) arr
-    checkedStm <- typecheckStatement rType stmt
-    -- Restore old state
-    lift $ put old_state
-    return (For itType itIdent checkedExpr checkedStm)
+    checkedExpr <- typecheckExpression arr
+    exprType <- extractType checkedExpr
+    if not $ isArrayType exprType then
+        throwE "Expression in For has to be an array"
+    else do
+        elemType <- elementType exprType
+        if elemType /= itType then
+            throwE "Missmatch between array type and declared iterator variable"
+        else do
+            checkedStm <- typecheckStatement rType stmt
+            -- Restore old state
+            lift $ put old_state
+            return (For itType itIdent checkedExpr checkedStm)
 typecheckStatement _ (SExp expr) = do
-    checkedExpr <- typecheckExpression Void expr
-    return (SExp checkedExpr)
+    checkedExpr <- typecheckExpression expr
+    exprType <- extractType checkedExpr
+    if exprType == Void then
+        return (SExp checkedExpr)
+    else
+        throwE "Only void expressions allowed as statements"
 
 typecheckDeclaration :: Type -> Item -> TCExceptRWS Item
 typecheckDeclaration Void _ = throwE "Can't declare a variable of type void"
@@ -211,108 +237,155 @@ typecheckDeclaration dType (NoInitVar ident) = do
     typecheckDeclaration' dType ident
     return (NoInitVar ident)
 typecheckDeclaration dType (Init ident expr) = do
-    checkedExp <- typecheckExpression dType expr
-    typecheckDeclaration' dType ident
-    return (Init ident checkedExp)
+    checkedExp <- typecheckExpression expr
+    exprType <- extractType checkedExp
+    if exprType == dType then do
+        typecheckDeclaration' dType ident
+        return (Init ident checkedExp)
+    else
+        throwE "Trying assign wrong type in declaration"
 
 typecheckDeclaration' :: Type -> Ident -> TCExceptRWS ()
 typecheckDeclaration' dType ident = do
     cstate <- lift get
-    -- head is fine here since there is always at least one map TODO: Refactor with NonEmpty
+    -- head is fine here since there is always at least one map 
     let scope = head cstate
+    -- If it is a user defined type, check that it actually exists
+    deSugardType <- case dType of
+        DefType tdIdent -> do
+            getTDType tdIdent
+        _ -> return dType
     case Map.lookup ident scope of
         Just _ -> throwE ("Variable " ++ show ident ++ " defined multiple times in the same scope")
         Nothing -> do
-            let new_scope = Map.insert ident dType scope
+            let new_scope = Map.insert ident deSugardType scope
             lift $ put (new_scope: tail cstate)
 
-typecheckExpression :: Type -> Expr -> TCExceptRWS Expr
-typecheckExpression _ (ETyped _ _) = throwE "INTERNAL ERROR: ETyped encountred while typechecking, meaning the typechecker has traversed this tree before"
-typecheckExpression eType e@(EVar ident) = do
+typecheckExpression :: Expr -> TCExceptRWS Expr
+typecheckExpression (ETyped _ _) = throwE "INTERNAL ERROR: ETyped encountred while typechecking, meaning the typechecker has traversed this tree before"
+typecheckExpression e@(EVar ident) = do
     vType <- lookupVariable ident
-    if vType == eType then
-        return $ ETyped eType e
-    else
-        throwE $ show eType ++ " expected, but " ++ show ident ++ " is of type " ++ show vType
-typecheckExpression eType (EIndex aExpr iExpr) = do
-    checkedAExpr <- typecheckExpression (Array eType) aExpr
-    checkedIExpr <- typecheckExpression Int iExpr
-    return $ ETyped eType (EIndex checkedAExpr checkedIExpr)
+    return $ ETyped vType e
+typecheckExpression (EIndex aExpr iExpr) = do
+    checkedAExpr <- typecheckExpression aExpr
+    aType <- extractType checkedAExpr
+    eType <- elementType aType
+    checkedIExpr <- typecheckExpression iExpr
+    iType <- extractType checkedIExpr
+    case iType of
+      Int -> return $ ETyped eType (EIndex checkedAExpr checkedIExpr)
+      t -> throwE $ "index has to be an integer, " ++ show t ++ " found"
 
-typecheckExpression Int e@(ELitInt _) = return $ ETyped Int e
-typecheckExpression eType (ELitInt _) = throwE $ "Int expected, found: " ++ show eType
+typecheckExpression e@(ELitInt _) = return $ ETyped Int e
 
-typecheckExpression Doub e@(ELitDoub _) = return $ ETyped Doub e
-typecheckExpression eType (ELitDoub _) = throwE $ "Double expected, found: " ++ show eType
+typecheckExpression e@(ELitDoub _) = return $ ETyped Doub e
 
-typecheckExpression Bool ELitTrue = return $ ETyped Bool ELitTrue
-typecheckExpression eType ELitTrue = throwE $ "Boolean expected, found: " ++ show eType
-typecheckExpression Bool ELitFalse = return $ ETyped Bool ELitFalse
-typecheckExpression eType ELitFalse = throwE $ "Boolean expected, found: " ++ show eType
-typecheckExpression eType (EApp ident args) = do
-    checkedArgs <- checkFunCall eType ident args
-    return $ ETyped eType $ EApp ident checkedArgs
+typecheckExpression ELitTrue = return $ ETyped Bool ELitTrue
+typecheckExpression ELitFalse = return $ ETyped Bool ELitFalse
+typecheckExpression (EApp ident args) = do
+    (rType, checkedArgs) <- checkFunCall ident args
+    return $ ETyped rType $ EApp ident checkedArgs
 -- String literals are handeled separatly so we never get here
-typecheckExpression _ (EString _) = throwE "INTERNAL ERROR: String in general expression"
-typecheckExpression eType (Neg subex) = do
-    checkedSubex <- typecheckExpression eType subex
-    return $ ETyped eType (Neg checkedSubex)
-typecheckExpression Bool (Not subex) = do
-    checkedSubex <- typecheckExpression Bool subex
-    return $ ETyped Bool (Not checkedSubex)
-typecheckExpression eType (Not _) = throwE $ "Boolean expected, found: " ++ show eType
--- Special case for Mod since it is only defined for Ints
-typecheckExpression Int (EMul e1 Mod e2) = do
-    checkedE1 <- typecheckExpression Int e1
-    checkedE2 <- typecheckExpression Int e2
-    return $ ETyped Int $ EMul checkedE1 Mod checkedE2
-typecheckExpression eType (EMul _ Mod _) = throwE $ "Integer expected, found " ++ show eType
-typecheckExpression Bool (EMul {}) = throwE "Multiplication not defined for Bool"
-typecheckExpression eType (EMul e1 op e2) = do
-    checkedE1 <- typecheckExpression eType e1
-    checkedE2 <- typecheckExpression eType e2
-    return $ ETyped eType $ EMul checkedE1 op checkedE2
-typecheckExpression Bool (EAdd {}) = throwE "Addition not defined for Bool"
-typecheckExpression eType (EAdd e1 op e2) = do
-    checkedE1 <- typecheckExpression eType e1
-    checkedE2 <- typecheckExpression eType e2
-    return $ ETyped eType $ EAdd checkedE1 op checkedE2
--- Since the types of e1 and e2 are not known yet, have to try both int and double
-typecheckExpression Bool (ERel e1 op e2) = do
-    t <- inferType e1
-    checkedExp1 <- typecheckExpression t e1
-    checkedExp2 <- typecheckExpression t e2
-    return $ ETyped Bool (ERel checkedExp1 op checkedExp2)
-typecheckExpression eType (ERel {}) = throwE $ show eType ++ " expected, found bool"
-typecheckExpression Bool (EAnd e1 e2) = do
-    checkedE1 <- typecheckExpression Bool e1
-    checkedE2 <- typecheckExpression Bool e2
-    return $ ETyped Bool $ EAnd checkedE1 checkedE2
-typecheckExpression eType (EAnd _ _) = throwE $ "And is defined for bools, not " ++ show eType
-typecheckExpression Bool (EOr e1 e2) = do
-    checkedE1 <- typecheckExpression Bool e1
-    checkedE2 <- typecheckExpression Bool e2
-    return $ ETyped Bool $ EOr checkedE1 checkedE2
-typecheckExpression eType (EOr _ _) = throwE $ "Or is defined for bools, not " ++ show eType
-typecheckExpression eType (ENew (NewArray aType sExpr)) =
-    if Array aType == eType then do
-        checkedExpr <- typecheckExpression Int sExpr
+typecheckExpression (EString _) = throwE "INTERNAL ERROR: String in general expression"
+typecheckExpression (Neg subex) = do
+    checkedSubex <- typecheckExpression subex
+    subexType <- extractType checkedSubex
+    case subexType of
+      Int -> return $ ETyped Int (Neg checkedSubex)
+      Doub -> return $ ETyped Doub (Neg checkedSubex)
+      _ -> throwE "Negation is only defined for Int and Double"
+typecheckExpression (Not subex) = do
+    checkedSubex <- typecheckExpression subex
+    subexType <- extractType checkedSubex
+    case subexType of
+      Bool -> return $ ETyped Bool (Not checkedSubex)
+      _ -> throwE "Not is only defined for booleans"
+typecheckExpression (EMul e1 Mod e2) = do
+    checkedE1 <- typecheckExpression e1
+    e1Type <- extractType checkedE1
+    checkedE2 <- typecheckExpression e2
+    e2Type <- extractType checkedE2
+    if e1Type /= e2Type then
+        throwE "left and right expressions in Mod are different types"
+    else
+        case e1Type of
+            Int -> return $ ETyped Int $ EMul checkedE1 Mod checkedE2
+            _ -> throwE "Modulus is only defined for integers"
+typecheckExpression (EMul e1 op e2) = do
+    checkedE1 <- typecheckExpression e1
+    e1Type <- extractType checkedE1
+    checkedE2 <- typecheckExpression e2
+    e2Type <- extractType checkedE2
+    if e1Type /= e2Type then
+        throwE "left and right expressions in mul op are different types"
+    else
+        case e1Type of
+            Int -> return $ ETyped Int $ EMul checkedE1 op checkedE2
+            Doub -> return $ ETyped Doub $ EMul checkedE1 op checkedE2
+            _ -> throwE "Mul is only defined for integers and doubles"
+typecheckExpression (EAdd e1 op e2) = do
+    checkedE1 <- typecheckExpression e1
+    e1Type <- extractType checkedE1
+    checkedE2 <- typecheckExpression e2
+    e2Type <- extractType checkedE2
+    if e1Type /= e2Type then
+        throwE "left and right expressions in add op are different types"
+    else
+        case e1Type of
+            Int -> return $ ETyped Int $ EAdd checkedE1 op checkedE2
+            Doub -> return $ ETyped Doub $ EAdd checkedE1 op checkedE2
+            _ -> throwE "add is only defined for integers and doubles"
+typecheckExpression (ERel e1 op e2) = do
+    checkedExp1 <- typecheckExpression e1
+    e1Type <- extractType checkedExp1
+    checkedExp2 <- typecheckExpression e2
+    e2Type <- extractType checkedExp2
+    if e1Type /= e2Type then
+        throwE "left and right expressions in rel op are different types"
+    else
+        case e1Type of
+            Int -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
+            Doub -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
+            Bool -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
+            _ -> throwE "relation is only defined for integers and doubles"
+typecheckExpression (EAnd e1 e2) = do
+    checkedE1 <- typecheckExpression e1
+    e1Type <- extractType checkedE1
+    checkedE2 <- typecheckExpression e2
+    e2Type <- extractType checkedE2
+    if e1Type == Bool && e2Type == Bool then
+        return $ ETyped Bool $ EAnd checkedE1 checkedE2
+    else 
+        throwE "And is only defined for booleans"
+typecheckExpression (EOr e1 e2) = do
+    checkedE1 <- typecheckExpression e1
+    e1Type <- extractType checkedE1
+    checkedE2 <- typecheckExpression e2
+    e2Type <- extractType checkedE2
+    if e1Type == Bool && e2Type == Bool then
+        return $ ETyped Bool $ EOr checkedE1 checkedE2
+    else 
+        throwE "Or is only defined for booleans"
+typecheckExpression (ENew (NewArray aType sExpr)) = do
+    checkedExpr <- typecheckExpression sExpr
+    exprType <- extractType checkedExpr
+    if exprType == Int then
         return $ ETyped (Array aType) (ENew (NewArray aType checkedExpr))
-    else do
-        throwE $ "Trying to assign a new array of " ++ show aType ++ "s to variable of type " ++ show eType
-typecheckExpression eType (ENew (NewStruct sType)) = undefined
+    else 
+        throwE $ "Size of array must be an int, " ++ show exprType ++ " found"
+typecheckExpression (ENew (NewStruct sType)) = throwE "Not Implemented"
 
-typecheckExpression eType (EDeref ptrExpr ident) = undefined
+typecheckExpression (EDeref ptrExpr ident) = throwE "Not Impplemented"
 
 --
-typecheckExpression Int e@(ESelect aExpr (Ident "length")) = do
-    aType <- inferType aExpr
-    checkedAExpr <- typecheckExpression aType aExpr
+typecheckExpression e@(ESelect aExpr (Ident "length")) = do
+    checkedAExpr <- typecheckExpression aExpr
+    aType <- extractType checkedAExpr
     if isArrayType aType then
         return $ ETyped Int (ESelect checkedAExpr (Ident "length"))
     else
         throwE $ show e ++ " is not an array type!"
-typecheckExpression eType (ESelect sExpr ident) = throwE "Not implemented"
+typecheckExpression (ESelect sExpr ident) = throwE "Not implemented"
 
 isArrayType :: Type -> Bool
 isArrayType t = t `elem` arrayTypes
@@ -321,18 +394,9 @@ elementType :: Type -> TCExceptRWS Type
 elementType (Array eType) = return eType
 elementType typ = throwE $ "elementType called on " ++ show typ
 
--- This function is a workaround for how I made the typecheckExpression function, 
--- it is very slow compared to real type inference since it just tries all types instead
-inferType :: Expr -> TCExceptRWS Type
-inferType expr = do
-    userTypes <- getAllUserTypes
-    res <- mapM checkExpr (types ++ userTypes)
-    case rights res of
-        [] -> throwE $ "INTERNAL ERROR: No type matches that of expression " ++ show expr ++ " errors: " ++ unlines (map show (lefts res) )
-        [ETyped t _] -> return t
-        _ -> throwE $ "INTERNAL ERROR: Failed to infer type of expression " ++ show expr
-    where
-        checkExpr t = tryE $ typecheckExpression t expr
+extractType :: Expr -> TCExceptRWS Type
+extractType (ETyped t _) = return t 
+extractType _ = throwE "extractType called on non ETyped"
 
 -- Backport of tryE since it is not in this version of transformers
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
@@ -353,19 +417,21 @@ getAllUserTypes = do
     let keys = Map.keys (typeDefs symbols)
     return $ map DefType keys
 
-checkFunCall :: Type -> Ident -> [Expr] -> TCExceptRWS [Expr]
+checkFunCall :: Ident -> [Expr] -> TCExceptRWS (Type, [Expr])
 -- printString needs special handeling since String is not a type in Javalette
-checkFunCall Void (Ident "printString") expr@[EString _] = return expr
-checkFunCall _ (Ident "printString") _ = throwE "printString called wrong"
-checkFunCall eType fIdent args = do
+checkFunCall (Ident "printString") expr@[EString _] = return (Void, expr)
+checkFunCall (Ident "printString") _ = throwE "printString called wrong"
+checkFunCall fIdent args = do
     (FunctionSig rType argTypes) <- getFunSig fIdent
     if length args /= length argTypes then
         throwE $ "Function " ++ show fIdent ++ " called with " ++ show (length args) ++ " when it takes " ++ show (length argTypes)
-    else
-        if eType /= rType then
-            throwE $ show eType ++ " expected, but " ++ show fIdent ++ " returns " ++ show rType
+    else do
+        checkedArgs <- mapM typecheckExpression args
+        providedArgTypes <- mapM extractType checkedArgs
+        if providedArgTypes == argTypes then
+            return (rType, checkedArgs)
         else
-            zipWithM typecheckExpression argTypes args
+            throwE "Function called with wrong argument types!"
 
 
 
@@ -376,12 +442,12 @@ getFunSig fIdent = do
         Nothing -> throwE ("Call to undeclared function " ++ show fIdent)
         Just fsig -> return fsig
 
-getTDType :: Ident -> TCExceptRWS TDef
+getTDType :: TDef -> TCExceptRWS Type
 getTDType tdIdent = do
     symbols <- lift ask
     case Map.lookup tdIdent (typeDefs symbols) of
         Nothing -> throwE ("Reference to non declared type " ++ show tdIdent)
-        Just fsig -> return fsig
+        Just td -> return (DefType td)
 getStruct :: Ident -> TCExceptRWS Structure
 getStruct structIdent = do
     symbols <- lift ask
