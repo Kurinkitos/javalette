@@ -4,12 +4,12 @@ import Lib
 import System.IO
 
 debug :: Bool
-debug = False
+debug = True
 
 main :: IO ()
 main = do
   if debug then do
-    handle <- openFile "/home/lilly/tda283/tester/testsuite/bad/struct02.jl" ReadMode
+    handle <- openFile "/home/lilly/tda283/tester/testsuite/extensions/pointers/list.jl" ReadMode
     --handle <- openFile "small.jl" ReadMode
     program_src <- hGetContents handle
     compileProgram program_src 2

@@ -29,43 +29,44 @@ import Javalette.Lex
   '&&'      { PT _ (TS _ 4)  }
   '('       { PT _ (TS _ 5)  }
   ')'       { PT _ (TS _ 6)  }
-  '*'       { PT _ (TS _ 7)  }
-  '+'       { PT _ (TS _ 8)  }
-  '++'      { PT _ (TS _ 9)  }
-  ','       { PT _ (TS _ 10) }
-  '-'       { PT _ (TS _ 11) }
-  '--'      { PT _ (TS _ 12) }
-  '->'      { PT _ (TS _ 13) }
-  '.'       { PT _ (TS _ 14) }
-  '/'       { PT _ (TS _ 15) }
-  ':'       { PT _ (TS _ 16) }
-  ';'       { PT _ (TS _ 17) }
-  '<'       { PT _ (TS _ 18) }
-  '<='      { PT _ (TS _ 19) }
-  '='       { PT _ (TS _ 20) }
-  '=='      { PT _ (TS _ 21) }
-  '>'       { PT _ (TS _ 22) }
-  '>='      { PT _ (TS _ 23) }
-  '['       { PT _ (TS _ 24) }
-  '[]'      { PT _ (TS _ 25) }
-  ']'       { PT _ (TS _ 26) }
-  'boolean' { PT _ (TS _ 27) }
-  'double'  { PT _ (TS _ 28) }
-  'else'    { PT _ (TS _ 29) }
-  'false'   { PT _ (TS _ 30) }
-  'for'     { PT _ (TS _ 31) }
-  'if'      { PT _ (TS _ 32) }
-  'int'     { PT _ (TS _ 33) }
-  'new'     { PT _ (TS _ 34) }
-  'return'  { PT _ (TS _ 35) }
-  'struct'  { PT _ (TS _ 36) }
-  'true'    { PT _ (TS _ 37) }
-  'typedef' { PT _ (TS _ 38) }
-  'void'    { PT _ (TS _ 39) }
-  'while'   { PT _ (TS _ 40) }
-  '{'       { PT _ (TS _ 41) }
-  '||'      { PT _ (TS _ 42) }
-  '}'       { PT _ (TS _ 43) }
+  ')null'   { PT _ (TS _ 7)  }
+  '*'       { PT _ (TS _ 8)  }
+  '+'       { PT _ (TS _ 9)  }
+  '++'      { PT _ (TS _ 10) }
+  ','       { PT _ (TS _ 11) }
+  '-'       { PT _ (TS _ 12) }
+  '--'      { PT _ (TS _ 13) }
+  '->'      { PT _ (TS _ 14) }
+  '.'       { PT _ (TS _ 15) }
+  '/'       { PT _ (TS _ 16) }
+  ':'       { PT _ (TS _ 17) }
+  ';'       { PT _ (TS _ 18) }
+  '<'       { PT _ (TS _ 19) }
+  '<='      { PT _ (TS _ 20) }
+  '='       { PT _ (TS _ 21) }
+  '=='      { PT _ (TS _ 22) }
+  '>'       { PT _ (TS _ 23) }
+  '>='      { PT _ (TS _ 24) }
+  '['       { PT _ (TS _ 25) }
+  '[]'      { PT _ (TS _ 26) }
+  ']'       { PT _ (TS _ 27) }
+  'boolean' { PT _ (TS _ 28) }
+  'double'  { PT _ (TS _ 29) }
+  'else'    { PT _ (TS _ 30) }
+  'false'   { PT _ (TS _ 31) }
+  'for'     { PT _ (TS _ 32) }
+  'if'      { PT _ (TS _ 33) }
+  'int'     { PT _ (TS _ 34) }
+  'new'     { PT _ (TS _ 35) }
+  'return'  { PT _ (TS _ 36) }
+  'struct'  { PT _ (TS _ 37) }
+  'true'    { PT _ (TS _ 38) }
+  'typedef' { PT _ (TS _ 39) }
+  'void'    { PT _ (TS _ 40) }
+  'while'   { PT _ (TS _ 41) }
+  '{'       { PT _ (TS _ 42) }
+  '||'      { PT _ (TS _ 43) }
+  '}'       { PT _ (TS _ 44) }
   L_Ident   { PT _ (TV $$)   }
   L_doubl   { PT _ (TD $$)   }
   L_integ   { PT _ (TI $$)   }
@@ -165,6 +166,7 @@ Expr6
   : Expr6 '[' Expr ']' { Javalette.Abs.EIndex $1 $3 }
   | Expr6 '->' Ident { Javalette.Abs.EDeref $1 $3 }
   | Expr6 '.' Ident { Javalette.Abs.ESelect $1 $3 }
+  | '(' Type ')null' { Javalette.Abs.ENull $2 }
   | Ident { Javalette.Abs.EVar $1 }
   | Integer { Javalette.Abs.ELitInt $1 }
   | Double { Javalette.Abs.ELitDoub $1 }

@@ -60,7 +60,6 @@ SExp.      Stmt ::= Expr  ";" ;
 
 -- Types ---------------------------------------------------
 
--- Somewhat ungly hack to try and get rid of conflicts from Type ::= Ident
 Array.     Type ::= Type "[]" ;
 
 Int.       Type ::= "int" ;
@@ -73,6 +72,8 @@ Void.      Type ::= "void" ;
 
 DefType.   Type ::= Ident ;
 
+-- Not part of the grammar, 
+internal   Ptr. Type ::= Ident "*" ;
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
@@ -92,6 +93,8 @@ EDeref.    Expr6 ::= Expr6 "->" Ident ;
 
 -- Currently just for length, but could be used for structures as well
 ESelect.   Expr6 ::= Expr6 "." Ident ;
+
+ENull.     Expr6 ::= "(" Type ")null" ;
 
 EVar.      Expr6 ::= Ident ;
 

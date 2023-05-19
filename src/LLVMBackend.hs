@@ -402,6 +402,8 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         lengthAddr <- gep arrPtr [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
         load lengthAddr 0
     ESelect _sExpr _ident -> error "Only supports .length for now"
+    ENull (DefType tName) -> undefined
+    ENull _ -> error "INTERNAL ERROR! ENull of non pointer type"
 
 cgExpr _ (EString str) = mdo
     let str_hash = BSS.toShort $ BSC.pack $ show $ hash str

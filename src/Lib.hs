@@ -35,7 +35,7 @@ compileProgram program v =
         Right (prog, fsigs) -> do
           hPutStrLn stderr "OK"
           showTree v prog
-          compileProgram' prog fsigs
+          --compileProgram' prog fsigs
 
 compileProgram' :: Prog -> Symbols -> IO ()
 compileProgram' program symbols = do

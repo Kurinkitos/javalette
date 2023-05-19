@@ -70,6 +70,7 @@ transType x = case x of
   Javalette.Abs.Bool -> failure x
   Javalette.Abs.Void -> failure x
   Javalette.Abs.DefType ident -> failure x
+  Javalette.Abs.Ptr ident -> failure x
   Javalette.Abs.Fun type_ types -> failure x
 
 transExpr :: Javalette.Abs.Expr -> Result
@@ -79,6 +80,7 @@ transExpr x = case x of
   Javalette.Abs.EIndex expr1 expr2 -> failure x
   Javalette.Abs.EDeref expr ident -> failure x
   Javalette.Abs.ESelect expr ident -> failure x
+  Javalette.Abs.ENull type_ -> failure x
   Javalette.Abs.EVar ident -> failure x
   Javalette.Abs.ELitInt integer -> failure x
   Javalette.Abs.ELitDoub double -> failure x

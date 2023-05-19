@@ -215,6 +215,7 @@ instance Print Javalette.Abs.Type where
     Javalette.Abs.Bool -> prPrec i 0 (concatD [doc (showString "boolean")])
     Javalette.Abs.Void -> prPrec i 0 (concatD [doc (showString "void")])
     Javalette.Abs.DefType id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Javalette.Abs.Ptr id_ -> prPrec i 0 (concatD [prt 0 id_, doc (showString "*")])
     Javalette.Abs.Fun type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
 
 instance Print [Javalette.Abs.Type] where
@@ -229,6 +230,7 @@ instance Print Javalette.Abs.Expr where
     Javalette.Abs.EIndex expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
     Javalette.Abs.EDeref expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "->"), prt 0 id_])
     Javalette.Abs.ESelect expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_])
+    Javalette.Abs.ENull type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")null")])
     Javalette.Abs.EVar id_ -> prPrec i 6 (concatD [prt 0 id_])
     Javalette.Abs.ELitInt n -> prPrec i 6 (concatD [prt 0 n])
     Javalette.Abs.ELitDoub d -> prPrec i 6 (concatD [prt 0 d])

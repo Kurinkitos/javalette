@@ -26,7 +26,7 @@ type SymbolsRWS = RWS Symbols () [Map.Map Ident Type]
 type TCExceptRWS = ExceptT String SymbolsRWS
 data Symbols = Symbols
     { functions :: Map.Map Ident FunctionSig
-    , structs :: Map.Map Ident Structure
+    , structs :: Map.Map Type Structure
     , typeDefs :: Map.Map Ident TDef
     }
 
@@ -35,25 +35,27 @@ typecheck :: Prog -> Either String (Prog, Symbols)
 typecheck (Program [])     = Left "No function definitions found"
 typecheck prog@(Program topdefs) = case initFunctionSigs prog of
     Left err -> Left err
-    Right fsigs -> case lefts checkedTds of
-        []  -> Right (Program (rights checkedTds), symbols)
-        ers -> Left (unlines ers)
-        where
-            checkedTds = checkedFns ++ checkedTypeDefs ++ checkedStructs
-            checkedFns = map (fst . checkFns) fnTds
-            checkedTypeDefs = map (fst . checkTypeDef) typeDefTds
-            checkedStructs = map (fst . checkStruct) structTds
-            checkFns fn = evalRWS (runExceptT (typecheckFunction fn)) symbols [functionArgTypes fn]
-            checkTypeDef td = evalRWS (runExceptT (typecheckTypeDef td)) symbols []
-            checkStruct strc = evalRWS (runExceptT (typecheckStruct strc)) symbols []
-            fnTds = [ fn | fn@FnDef {} <- topdefs]
-            typeDefTds = [ td | td@TypeDef {} <- topdefs]
-            structTds = [ strc | strc@StructDef {} <- topdefs]
-            symbols = Symbols {
-                functions = fsigs,
-                structs = Map.empty,
-                typeDefs = Map.empty
-            }
+    Right fsigs -> case initStructures prog of
+        Left err -> Left err
+        Right structSigs -> case lefts checkedTds of
+            []  -> Right (Program (rights checkedTds), symbols)
+            ers -> Left (unlines ers)
+            where
+                checkedTds = checkedFns ++ checkedTypeDefs ++ checkedStructs
+                checkedFns = map (fst . checkFns) fnTds
+                checkedTypeDefs = map (fst . checkTypeDef) typeDefTds
+                checkedStructs = map (fst . checkStruct) structTds
+                checkFns fn = evalRWS (runExceptT (typecheckFunction fn)) symbols [functionArgTypes fn]
+                checkTypeDef td = evalRWS (runExceptT (typecheckTypeDef td)) symbols []
+                checkStruct strc = evalRWS (runExceptT (typecheckStruct strc)) symbols []
+                fnTds = [ fn | fn@FnDef {} <- topdefs]
+                typeDefTds = [ td | td@TypeDef {} <- topdefs]
+                structTds = [ strc | strc@StructDef {} <- topdefs]
+                symbols = Symbols {
+                    functions = fsigs,
+                    structs = structSigs,
+                    typeDefs = initTypeDefs prog
+                }
 
 
 
@@ -72,7 +74,7 @@ initFunctionSigs (Program defs) = case repeated fidents of
             Nothing -> Left "No main function!"
             Just (FunctionSig Int []) -> Right funs
             Just _ -> Left "Main function has wrong signature!"
-        (ident:_) -> Left ("Topdef " ++ show ident ++ " defined multiple times")
+        (ident:_) -> Left ("Function " ++ show ident ++ " defined multiple times")
     where
         funs = Map.fromList fsigs
         fsigs = primitiveFunctions ++ initFunctionSigs' defs
@@ -94,28 +96,57 @@ initFunctionSigs' ((FnDef retType ident args _):tds) =
         argTypes = map argToType args
 initFunctionSigs' (_:tds) = initFunctionSigs' tds
 
-initStructures :: [TopDef] -> [(Ident, Structure)]
-initStructures [] = []
-initStructures ((StructDef ident mems):tds) = (ident, initStructMems mems) : initStructures tds
+initStructures :: Prog -> Either String (Map.Map Type Structure)
+initStructures (Program defs) = case repeated structIdents of
+    [] -> Right (Map.fromList structList)
+    (ident:_) -> Left ("Structure " ++ show ident ++ " defined multiple times")
+    where
+        structList = initStructures' defs
+        structIdents = map fst structList
+
+initStructures' :: [TopDef] -> [(Type, Structure)]
+initStructures' [] = []
+initStructures' ((StructDef ident mems):tds) = (Ptr ident, initStructMems mems) : initStructures' tds
     where
         initStructMems mms = Map.fromList (map initStructMem mms)
         initStructMem (Member mType mIdent) = (mIdent, mType)
-initStructures (_:tds) = initStructures tds
+initStructures' (_:tds) = initStructures' tds
 
-initTypeDefs :: [TopDef] -> [(Ident, TDef)]
-initTypeDefs [] = []
-initTypeDefs ((TypeDef srcType newName):tds) = (newName, srcType) : initTypeDefs tds
-initTypeDefs (_:tds) = initTypeDefs tds
+initTypeDefs :: Prog -> Map.Map Ident TDef
+initTypeDefs (Program tdefs) = Map.fromList (initTypeDefs' tdefs)
+
+initTypeDefs' :: [TopDef] -> [(Ident, TDef)]
+initTypeDefs' [] = []
+initTypeDefs' ((TypeDef srcType newName):tds) = (newName, srcType) : initTypeDefs' tds
+initTypeDefs' (_:tds) = initTypeDefs' tds
 
 
 argToType :: Arg -> Type
 argToType (Argument t _) = t
 
 typecheckTypeDef :: TopDef -> TCExceptRWS TopDef
-typecheckTypeDef = undefined
+typecheckTypeDef td@(TypeDef srcType newName) = do
+    baseType <- getTDType newName
+    _structType <- getStruct baseType
+    if baseType /= Ptr srcType then
+        throwE "Internal error, typedef has wrong type in State"
+    else
+        return td
+typecheckTypeDef _ = throwE "typecheckTypeDef called on non TypeDef"
 
 typecheckStruct :: TopDef -> TCExceptRWS TopDef
-typecheckStruct = undefined
+typecheckStruct td@(StructDef _ mems) = do
+    case repeated (map memIdent mems) of
+        [] -> do
+            mapM_ (checkType . memType) mems
+            return td
+        (ident:_) -> throwE $ "Member " ++ show ident ++ " defined multiple times"
+typecheckStruct _ = throwE "typecheckStruct called on non Struct"
+
+memType :: Mem -> Type
+memType (Member t _) = t
+memIdent :: Mem -> Ident
+memIdent (Member _ ident) = ident
 
 -- I'm checking that the function returns separate from the main pass. 
 -- It's a lot slower but simplifies the functions
@@ -123,27 +154,34 @@ typecheckFunction :: TopDef -> TCExceptRWS TopDef
 typecheckFunction topdef@(FnDef Void _id _args _blk) = do
     fixedTopdef <- implicitReturn topdef
     typecheckFunction' fixedTopdef
-typecheckFunction topdef@(FnDef _retType _id _args (Block stms)) = if allPathsReturn stms
-    then typecheckFunction' topdef
+typecheckFunction (FnDef retType ident args (Block stms)) = if allPathsReturn stms
+    then do
+        dsRetType <- desugarType retType
+        typecheckFunction' (FnDef dsRetType ident args (Block stms))
     else throwE "Function is not guaranteed to return a value"
 typecheckFunction _ = throwE "typecheckFunction called on non function!"
+
 
 
 typecheckFunction' :: TopDef -> TCExceptRWS TopDef
 typecheckFunction' (FnDef retType ident args (Block stms)) = do
     if Void `elem` map argToType args then
             throwE "Void is not allowed as a argument type"
-        else
-            FnDef retType ident args . Block <$> checkedStms
-    where
-        checkedStms = mapM (typecheckStatement retType) stms
+        else do
+            dsArgs <- mapM desugarArg args
+            checkedStms <- mapM (typecheckStatement retType) stms
+            return $ FnDef retType ident dsArgs (Block checkedStms)
 typecheckFunction' _ = throwE "typecheckFunction' Called on non Function!"
+
+desugarArg :: Arg -> TCExceptRWS Arg
+desugarArg (Argument aType ident) = do
+    dsAType <- desugarType aType
+    return $ Argument dsAType ident
 
 -- Make implicit returns explicit
 implicitReturn :: TopDef -> TCExceptRWS TopDef
 implicitReturn (FnDef Void fid args (Block stms)) = return $ FnDef Void fid args (Block (stms ++ [VRet]))
 implicitReturn _ = throwE "Only void functions can have implicit return"
-
 
 
 
@@ -168,7 +206,7 @@ typecheckStatement _ (Ass lExpr assExpr) = do
     if lType == assType then
         return $ Ass checkedLExpr checkedAssExpr
     else
-        throwE "Trying to assign an expression of the wrong type"
+        throwE $ "Trying to assign an expression of type " ++ show assType ++ " to variable of " ++ show lType
 typecheckStatement _ (Incr ident) = do
     vType <- lookupVariable ident
     case vType of
@@ -201,7 +239,7 @@ typecheckStatement rType (CondElse expr stm1 stm2) = do
 typecheckStatement rType (While expr stmt) = do
     checkedExpr <- typecheckExpression expr
     exprType <- extractType checkedExpr
-    if exprType /= Bool then 
+    if exprType /= Bool then
         throwE "Expression in while has to be boolean"
     else do
         checkedStm <- typecheckStatement rType stmt
@@ -341,7 +379,7 @@ typecheckExpression (ERel e1 op e2) = do
     checkedExp2 <- typecheckExpression e2
     e2Type <- extractType checkedExp2
     if e1Type /= e2Type then
-        throwE "left and right expressions in rel op are different types"
+        throwE $ "left expr has type " ++ show e1Type ++ " and right has type " ++ show e2Type
     else
         case e1Type of
             Int -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
@@ -355,7 +393,7 @@ typecheckExpression (EAnd e1 e2) = do
     e2Type <- extractType checkedE2
     if e1Type == Bool && e2Type == Bool then
         return $ ETyped Bool $ EAnd checkedE1 checkedE2
-    else 
+    else
         throwE "And is only defined for booleans"
 typecheckExpression (EOr e1 e2) = do
     checkedE1 <- typecheckExpression e1
@@ -364,18 +402,39 @@ typecheckExpression (EOr e1 e2) = do
     e2Type <- extractType checkedE2
     if e1Type == Bool && e2Type == Bool then
         return $ ETyped Bool $ EOr checkedE1 checkedE2
-    else 
+    else
         throwE "Or is only defined for booleans"
+
 typecheckExpression (ENew (NewArray aType sExpr)) = do
     checkedExpr <- typecheckExpression sExpr
     exprType <- extractType checkedExpr
     if exprType == Int then
         return $ ETyped (Array aType) (ENew (NewArray aType checkedExpr))
-    else 
+    else
         throwE $ "Size of array must be an int, " ++ show exprType ++ " found"
-typecheckExpression (ENew (NewStruct sType)) = throwE "Not Implemented"
+typecheckExpression ne@(ENew (NewStruct (DefType sIdent))) = do
+    _struct <- getStruct (Ptr sIdent)
+    return $ ETyped (Ptr sIdent) ne
 
-typecheckExpression (EDeref ptrExpr ident) = throwE "Not Impplemented"
+typecheckExpression (ENew (NewStruct _)) = throwE "New used on non struct"
+
+typecheckExpression (EDeref ptrExpr mIdent) = do
+    checkedPtrExpr <- typecheckExpression ptrExpr
+    ptrType <- extractType checkedPtrExpr
+    case ptrType of
+        (DefType tdIdent) -> do
+            structType <- getTDType tdIdent
+            struct <- getStruct structType
+            case Map.lookup mIdent struct of
+                Nothing -> throwE $ "Struct does not have a member called" ++ show mIdent
+                (Just memT) -> return $ ETyped memT (EDeref checkedPtrExpr mIdent)
+        structType@(Ptr _sIdent) -> do
+            struct <- getStruct structType
+            case Map.lookup mIdent struct of
+                Nothing -> throwE $ "Struct does not have a member called" ++ show mIdent
+                (Just memT) -> return $ ETyped memT (EDeref checkedPtrExpr mIdent)
+        t -> throwE $ "Trying to dereferece non pointer type " ++ show t
+        
 
 --
 typecheckExpression e@(ESelect aExpr (Ident "length")) = do
@@ -387,6 +446,11 @@ typecheckExpression e@(ESelect aExpr (Ident "length")) = do
         throwE $ show e ++ " is not an array type!"
 typecheckExpression (ESelect sExpr ident) = throwE "Not implemented"
 
+typecheckExpression (ENull t@(DefType _ptrName)) = do
+    dsType <- desugarType t
+    return $ ETyped dsType (ENull dsType)
+typecheckExpression (ENull t ) = throwE $ "Null of non pointer type " ++ show t
+
 isArrayType :: Type -> Bool
 isArrayType t = t `elem` arrayTypes
 
@@ -395,12 +459,26 @@ elementType (Array eType) = return eType
 elementType typ = throwE $ "elementType called on " ++ show typ
 
 extractType :: Expr -> TCExceptRWS Type
-extractType (ETyped t _) = return t 
+extractType (ETyped t _) = return t
 extractType _ = throwE "extractType called on non ETyped"
 
 -- Backport of tryE since it is not in this version of transformers
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (liftM Right m) (return . Left)
+
+desugarType :: Type -> TCExceptRWS Type
+desugarType (DefType ident) = do
+    tdBase <- tryE $ getTDType ident
+    case tdBase of
+      Left _s -> return $ Ptr ident
+      Right ty -> return ty
+desugarType t = return t
+
+checkType :: Type -> TCExceptRWS ()
+checkType (DefType ident) = do
+    _ <- getTDType ident
+    return ()
+checkType _ = return ()
 
 types :: [Type]
 types = [Void] ++ baseTypes ++ arrayTypes
@@ -434,7 +512,6 @@ checkFunCall fIdent args = do
             throwE "Function called with wrong argument types!"
 
 
-
 getFunSig :: Ident -> TCExceptRWS FunctionSig
 getFunSig fIdent = do
     symbols <- lift ask
@@ -446,14 +523,15 @@ getTDType :: TDef -> TCExceptRWS Type
 getTDType tdIdent = do
     symbols <- lift ask
     case Map.lookup tdIdent (typeDefs symbols) of
-        Nothing -> throwE ("Reference to non declared type " ++ show tdIdent)
-        Just td -> return (DefType td)
-getStruct :: Ident -> TCExceptRWS Structure
-getStruct structIdent = do
+        Nothing -> throwE ("Reference to non declared def type " ++ show tdIdent)
+        Just td -> return (Ptr td)
+getStruct :: Type -> TCExceptRWS Structure
+getStruct structType@(Ptr _ident) = do
     symbols <- lift ask
-    case Map.lookup structIdent (structs symbols) of
-        Nothing -> throwE ("Reference to non declared type " ++ show structIdent)
-        Just fsig -> return fsig
+    case Map.lookup structType (structs symbols) of
+        Nothing -> throwE ("Reference to non declared struct " ++ show structType)
+        Just struct -> return struct
+getStruct t = throwE $ "getStruct called on non pointer type " ++ show t
 
 -- Checks if all paths of a program return. Notably does not check type of the return or for situations like
 -- if True return

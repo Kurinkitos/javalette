@@ -54,6 +54,7 @@ data Type
     | Bool
     | Void
     | DefType Ident
+    | Ptr Ident
     | Fun Type [Type]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
@@ -63,6 +64,7 @@ data Expr
     | EIndex Expr Expr
     | EDeref Expr Ident
     | ESelect Expr Ident
+    | ENull Type
     | EVar Ident
     | ELitInt Integer
     | ELitDoub Double
