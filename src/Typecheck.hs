@@ -45,7 +45,7 @@ typecheck prog@(Program topdefs) = case initFunctionSigs prog of
                 checkedFns = map (fst . checkFns) fnTds
                 checkedTypeDefs = map (fst . checkTypeDef) typeDefTds
                 checkedStructs = map (fst . checkStruct) structTds
-                checkFns fn = evalRWS (runExceptT (typecheckFunction fn)) symbols [functionArgTypes fn]
+                checkFns fn = evalRWS (runExceptT (typecheckFunction fn)) symbols []
                 checkTypeDef td = evalRWS (runExceptT (typecheckTypeDef td)) symbols []
                 checkStruct strc = evalRWS (runExceptT (typecheckStruct strc)) symbols []
                 fnTds = [ fn | fn@FnDef {} <- topdefs]
@@ -59,14 +59,6 @@ typecheck prog@(Program topdefs) = case initFunctionSigs prog of
 
 
 
-
-functionArgTypes :: TopDef -> Map.Map Ident Type
-functionArgTypes (FnDef _ _ args _) = Map.fromList (functionArgTypes' args)
-functionArgTypes _ = error "functionArgTypes called on non FnDef topdef"
-
-functionArgTypes' :: [Arg] -> [(Ident, Type)]
-functionArgTypes' [] = []
-functionArgTypes' ((Argument t ident):as) = (ident, t) : functionArgTypes' as
 
 initFunctionSigs :: Prog -> Either String (Map.Map Ident FunctionSig)
 initFunctionSigs (Program defs) = case repeated fidents of
@@ -135,18 +127,21 @@ typecheckTypeDef td@(TypeDef srcType newName) = do
 typecheckTypeDef _ = throwE "typecheckTypeDef called on non TypeDef"
 
 typecheckStruct :: TopDef -> TCExceptRWS TopDef
-typecheckStruct td@(StructDef _ mems) = do
+typecheckStruct (StructDef sIdent mems) = do
     case repeated (map memIdent mems) of
         [] -> do
-            mapM_ (checkType . memType) mems
-            return td
+            dsMems <- mapM desugarMem mems
+            return $ StructDef sIdent dsMems
         (ident:_) -> throwE $ "Member " ++ show ident ++ " defined multiple times"
 typecheckStruct _ = throwE "typecheckStruct called on non Struct"
 
-memType :: Mem -> Type
-memType (Member t _) = t
 memIdent :: Mem -> Ident
 memIdent (Member _ ident) = ident
+
+desugarMem :: Mem -> TCExceptRWS Mem
+desugarMem (Member t ident) = do
+    dsType <- desugarType t
+    return $ Member dsType ident
 
 -- I'm checking that the function returns separate from the main pass. 
 -- It's a lot slower but simplifies the functions
@@ -169,9 +164,17 @@ typecheckFunction' (FnDef retType ident args (Block stms)) = do
             throwE "Void is not allowed as a argument type"
         else do
             dsArgs <- mapM desugarArg args
+            let argMap = Map.fromList (functionArgTypes dsArgs)
+            -- Push the arguments to the state
+            lift (put [argMap])
             checkedStms <- mapM (typecheckStatement retType) stms
             return $ FnDef retType ident dsArgs (Block checkedStms)
 typecheckFunction' _ = throwE "typecheckFunction' Called on non Function!"
+
+functionArgTypes :: [Arg] -> [(Ident, Type)]
+functionArgTypes [] = []
+functionArgTypes ((Argument t ident):as) = (ident, t) : functionArgTypes as
+
 
 desugarArg :: Arg -> TCExceptRWS Arg
 desugarArg (Argument aType ident) = do
@@ -196,8 +199,9 @@ typecheckStatement retType (BStmt (Block stms)) = do
     lift $ put old_state
     return (BStmt (Block checkedStms))
 typecheckStatement _ (Decl vType decls) = do
-    checkedDeclarations <- mapM (typecheckDeclaration vType) decls
-    return (Decl vType checkedDeclarations)
+    dsVType <- desugarType vType
+    checkedDeclarations <- mapM (typecheckDeclaration dsVType) decls
+    return (Decl dsVType checkedDeclarations)
 typecheckStatement _ (Ass lExpr assExpr) = do
     checkedLExpr <- typecheckExpression lExpr
     lType <- extractType checkedLExpr
@@ -246,7 +250,8 @@ typecheckStatement rType (While expr stmt) = do
         return (While checkedExpr checkedStm)
 typecheckStatement rType (For itType itIdent arr stmt) = do
     old_state <- lift get
-    let forState = Map.fromList [(itIdent, itType)]
+    dsItType <- desugarType itType
+    let forState = Map.fromList [(itIdent, dsItType)]
     lift $ put $ forState:old_state
     checkedExpr <- typecheckExpression arr
     exprType <- extractType checkedExpr
@@ -254,13 +259,13 @@ typecheckStatement rType (For itType itIdent arr stmt) = do
         throwE "Expression in For has to be an array"
     else do
         elemType <- elementType exprType
-        if elemType /= itType then
-            throwE "Missmatch between array type and declared iterator variable"
+        if elemType /= dsItType then
+            throwE $ "elemType is" ++ show elemType ++ " while dsItType is " ++ show dsItType
         else do
             checkedStm <- typecheckStatement rType stmt
             -- Restore old state
             lift $ put old_state
-            return (For itType itIdent checkedExpr checkedStm)
+            return (For dsItType itIdent checkedExpr checkedStm)
 typecheckStatement _ (SExp expr) = do
     checkedExpr <- typecheckExpression expr
     exprType <- extractType checkedExpr
@@ -281,7 +286,7 @@ typecheckDeclaration dType (Init ident expr) = do
         typecheckDeclaration' dType ident
         return (Init ident checkedExp)
     else
-        throwE "Trying assign wrong type in declaration"
+        throwE $ "In declaration, trying to assign " ++ show exprType ++ " to variable of type " ++ show dType
 
 typecheckDeclaration' :: Type -> Ident -> TCExceptRWS ()
 typecheckDeclaration' dType ident = do
@@ -289,14 +294,10 @@ typecheckDeclaration' dType ident = do
     -- head is fine here since there is always at least one map 
     let scope = head cstate
     -- If it is a user defined type, check that it actually exists
-    deSugardType <- case dType of
-        DefType tdIdent -> do
-            getTDType tdIdent
-        _ -> return dType
     case Map.lookup ident scope of
         Just _ -> throwE ("Variable " ++ show ident ++ " defined multiple times in the same scope")
         Nothing -> do
-            let new_scope = Map.insert ident deSugardType scope
+            let new_scope = Map.insert ident dType scope
             lift $ put (new_scope: tail cstate)
 
 typecheckExpression :: Expr -> TCExceptRWS Expr
@@ -322,7 +323,8 @@ typecheckExpression ELitTrue = return $ ETyped Bool ELitTrue
 typecheckExpression ELitFalse = return $ ETyped Bool ELitFalse
 typecheckExpression (EApp ident args) = do
     (rType, checkedArgs) <- checkFunCall ident args
-    return $ ETyped rType $ EApp ident checkedArgs
+    dsRType <- desugarType rType
+    return $ ETyped dsRType $ EApp ident checkedArgs
 -- String literals are handeled separatly so we never get here
 typecheckExpression (EString _) = throwE "INTERNAL ERROR: String in general expression"
 typecheckExpression (Neg subex) = do
@@ -385,7 +387,8 @@ typecheckExpression (ERel e1 op e2) = do
             Int -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
             Doub -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
             Bool -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
-            _ -> throwE "relation is only defined for integers and doubles"
+            Ptr _t -> return $ ETyped Bool $ ERel checkedExp1 op checkedExp2
+            t -> throwE $ "relation is not defined for " ++ show t
 typecheckExpression (EAnd e1 e2) = do
     checkedE1 <- typecheckExpression e1
     e1Type <- extractType checkedE1
@@ -422,28 +425,24 @@ typecheckExpression (EDeref ptrExpr mIdent) = do
     checkedPtrExpr <- typecheckExpression ptrExpr
     ptrType <- extractType checkedPtrExpr
     case ptrType of
-        (DefType tdIdent) -> do
-            structType <- getTDType tdIdent
-            struct <- getStruct structType
-            case Map.lookup mIdent struct of
-                Nothing -> throwE $ "Struct does not have a member called" ++ show mIdent
-                (Just memT) -> return $ ETyped memT (EDeref checkedPtrExpr mIdent)
         structType@(Ptr _sIdent) -> do
             struct <- getStruct structType
             case Map.lookup mIdent struct of
                 Nothing -> throwE $ "Struct does not have a member called" ++ show mIdent
-                (Just memT) -> return $ ETyped memT (EDeref checkedPtrExpr mIdent)
+                (Just memT) -> do
+                    dsMemT <- desugarType memT
+                    return $ ETyped dsMemT (EDeref checkedPtrExpr mIdent)
         t -> throwE $ "Trying to dereferece non pointer type " ++ show t
-        
+
 
 --
-typecheckExpression e@(ESelect aExpr (Ident "length")) = do
+typecheckExpression (ESelect aExpr (Ident "length")) = do
     checkedAExpr <- typecheckExpression aExpr
     aType <- extractType checkedAExpr
     if isArrayType aType then
         return $ ETyped Int (ESelect checkedAExpr (Ident "length"))
     else
-        throwE $ show e ++ " is not an array type!"
+        throwE $ show (aType) ++ " is not an array type!"
 typecheckExpression (ESelect sExpr ident) = throwE "Not implemented"
 
 typecheckExpression (ENull t@(DefType _ptrName)) = do
@@ -452,14 +451,15 @@ typecheckExpression (ENull t@(DefType _ptrName)) = do
 typecheckExpression (ENull t ) = throwE $ "Null of non pointer type " ++ show t
 
 isArrayType :: Type -> Bool
-isArrayType t = t `elem` arrayTypes
+isArrayType (Array _) = True
+isArrayType _ = False
 
 elementType :: Type -> TCExceptRWS Type
 elementType (Array eType) = return eType
 elementType typ = throwE $ "elementType called on " ++ show typ
 
 extractType :: Expr -> TCExceptRWS Type
-extractType (ETyped t _) = return t
+extractType (ETyped t _) = desugarType t
 extractType _ = throwE "extractType called on non ETyped"
 
 -- Backport of tryE since it is not in this version of transformers
@@ -470,15 +470,15 @@ desugarType :: Type -> TCExceptRWS Type
 desugarType (DefType ident) = do
     tdBase <- tryE $ getTDType ident
     case tdBase of
-      Left _s -> return $ Ptr ident
+      Left _s -> do
+        -- This branch means we should have a struct type
+        _struct <- getStruct (Ptr ident)
+        return (Ptr ident)
       Right ty -> return ty
+desugarType (Array elemType) = do
+    dsElemType <- desugarType elemType
+    return (Array dsElemType)
 desugarType t = return t
-
-checkType :: Type -> TCExceptRWS ()
-checkType (DefType ident) = do
-    _ <- getTDType ident
-    return ()
-checkType _ = return ()
 
 types :: [Type]
 types = [Void] ++ baseTypes ++ arrayTypes
@@ -506,10 +506,11 @@ checkFunCall fIdent args = do
     else do
         checkedArgs <- mapM typecheckExpression args
         providedArgTypes <- mapM extractType checkedArgs
-        if providedArgTypes == argTypes then
+        dsArgTypes <- mapM desugarType argTypes
+        if providedArgTypes == dsArgTypes then
             return (rType, checkedArgs)
         else
-            throwE "Function called with wrong argument types!"
+            throwE $ "Function called with wrong argument types! Expected " ++ show dsArgTypes ++ " got " ++ show providedArgTypes
 
 
 getFunSig :: Ident -> TCExceptRWS FunctionSig

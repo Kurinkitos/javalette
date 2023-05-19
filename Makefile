@@ -27,7 +27,7 @@ compiler : src/Javalette/Abs.hs
 
 # ./runtest.sh -l -x arrays1 -x pointers -x arrays1_pointers .
 test : compiler
-	./runtest.sh -x arrays1 -x pointers .
+	./runtest.sh -x arrays1 -x pointers -x arrays1_pointers .
 
 invoke: compiler
 	stack run > prog.ll
