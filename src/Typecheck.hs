@@ -442,8 +442,8 @@ typecheckExpression (ESelect aExpr (Ident "length")) = do
     if isArrayType aType then
         return $ ETyped Int (ESelect checkedAExpr (Ident "length"))
     else
-        throwE $ show (aType) ++ " is not an array type!"
-typecheckExpression (ESelect sExpr ident) = throwE "Not implemented"
+        throwE $ show aType ++ " is not an array type!"
+typecheckExpression (ESelect _sExpr _ident) = throwE "Not implemented"
 
 typecheckExpression (ENull t@(DefType _ptrName)) = do
     dsType <- desugarType t
@@ -479,21 +479,6 @@ desugarType (Array elemType) = do
     dsElemType <- desugarType elemType
     return (Array dsElemType)
 desugarType t = return t
-
-types :: [Type]
-types = [Void] ++ baseTypes ++ arrayTypes
-
-baseTypes :: [Type]
-baseTypes = [Int, Doub, Bool]
-
-arrayTypes :: [Type]
-arrayTypes = map Array baseTypes
-
-getAllUserTypes :: TCExceptRWS [Type]
-getAllUserTypes = do
-    symbols <- lift ask
-    let keys = Map.keys (typeDefs symbols)
-    return $ map DefType keys
 
 checkFunCall :: Ident -> [Expr] -> TCExceptRWS (Type, [Expr])
 -- printString needs special handeling since String is not a type in Javalette

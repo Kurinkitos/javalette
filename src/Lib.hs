@@ -32,10 +32,10 @@ compileProgram program v =
           hPutStrLn stderr "TYPE ERROR"
           hPutStrLn stderr err
           exitFailure
-        Right (prog, fsigs) -> do
+        Right (prog, symbols) -> do
           hPutStrLn stderr "OK"
           showTree v prog
-          --compileProgram' prog fsigs
+          compileProgram' prog symbols
 
 compileProgram' :: Prog -> Symbols -> IO ()
 compileProgram' program symbols = do
