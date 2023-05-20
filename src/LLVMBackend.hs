@@ -6,7 +6,7 @@ module LLVMBackend (
 ) where
 import Javalette.Abs
 import qualified Data.Map as Map
-import Typecheck (Symbols (functions, structs, typeDefs), FunctionSig (FunctionSig))
+import Typecheck (Symbols (functions), FunctionSig (FunctionSig))
 import Data.Text.Lazy (unpack)
 
 import Data.ByteString.Short as BSS
@@ -89,7 +89,7 @@ cgStruct _ = undefined
 memOffsets :: [Mem] -> [(Ident, Operand)]
 memOffsets = memOffsets' 0
 memOffsets' :: Integer -> [Mem] -> [(Ident, Operand)]
-memOffsets' n [] = []
+memOffsets' _ [] = []
 memOffsets' n ((Member _mType ident):ms) = (ident, offset) : memOffsets' (n+1) ms
     where
         offset = ConstantOperand (C.Int 32 n)
