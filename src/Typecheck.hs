@@ -14,7 +14,7 @@ import Control.Monad
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Trans.RWS
 import Control.Monad.Trans.Except ( runExceptT, ExceptT, throwE, catchE)
-import Data.Either (lefts, rights)
+import Data.Either (lefts, rights, fromRight)
 
 data FunctionSig = FunctionSig Type [Type]
     deriving Show
@@ -29,6 +29,7 @@ data Symbols = Symbols
     , structs :: Map.Map Type Structure
     , typeDefs :: Map.Map Ident TDef
     }
+    deriving Show
 
 
 typecheck :: Prog -> Either String (Prog, Symbols)
@@ -38,7 +39,7 @@ typecheck prog@(Program topdefs) = case initFunctionSigs prog of
     Right fsigs -> case initStructures prog of
         Left err -> Left err
         Right structSigs -> case lefts checkedTds of
-            []  -> Right (Program (rights checkedTds), symbols)
+            []  -> Right (Program (rights checkedTds), extractSymbols (Program (rights checkedTds)))
             ers -> Left (unlines ers)
             where
                 checkedTds = checkedFns ++ checkedTypeDefs ++ checkedStructs
@@ -57,6 +58,14 @@ typecheck prog@(Program topdefs) = case initFunctionSigs prog of
                     typeDefs = initTypeDefs prog
                 }
 
+
+-- Function to get the desugard symbols from the typechecked program
+extractSymbols :: Prog -> Symbols
+extractSymbols prog = Symbols
+    { functions = fromRight Map.empty (initFunctionSigs prog)
+    , structs = fromRight Map.empty (initStructures prog)
+    , typeDefs = Map.empty -- Since the typechecked replaces all typedefs they are no longer needed
+    }
 
 
 
@@ -411,13 +420,14 @@ typecheckExpression (EOr e1 e2) = do
 typecheckExpression (ENew (NewArray aType sExpr)) = do
     checkedExpr <- typecheckExpression sExpr
     exprType <- extractType checkedExpr
+    dsAType <- desugarType aType
     if exprType == Int then
-        return $ ETyped (Array aType) (ENew (NewArray aType checkedExpr))
+        return $ ETyped (Array dsAType) (ENew (NewArray dsAType checkedExpr))
     else
         throwE $ "Size of array must be an int, " ++ show exprType ++ " found"
-typecheckExpression ne@(ENew (NewStruct (DefType sIdent))) = do
+typecheckExpression (ENew (NewStruct (DefType sIdent))) = do
     _struct <- getStruct (Ptr sIdent)
-    return $ ETyped (Ptr sIdent) ne
+    return $ ETyped (Ptr sIdent) (ENew (NewStruct (Ptr sIdent)))
 
 typecheckExpression (ENew (NewStruct _)) = throwE "New used on non struct"
 

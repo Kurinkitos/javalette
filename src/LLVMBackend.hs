@@ -37,13 +37,21 @@ compile program fsigs = Data.Text.Lazy.unpack $ ppllvm m
 
 type CgMonad a = CgRSWT (IRBuilderT ModuleBuilder) a
 -- Stack of Maps from JL identifiers to LLVM names
-type CgRSWT = RWST (Map.Map Ident Operand) () [Map.Map Ident Operand]
+type CgRSWT = RWST CgSymbols () [Map.Map Ident Operand]
+data CgSymbols = CgSymbols
+    { fSigs  :: Map.Map Ident Operand
+    , sTypes :: Map.Map Ident Structure
+    }
+-- The map contains operands with constants for the index for that member to give to a gep instruction
+data Structure = Structure LLVM.AST.Type (Map.Map Ident Operand)
 
 codegen :: Prog -> Symbols -> Module
 codegen (Program tds) symbols = buildModule "Javalette" $ mdo
     builtIns <- cgBuiltinDefs
     fndefs <- pushFnDefs (Map.toList (functions symbols))
-    mapM (cgFun (Map.fromList (builtIns ++ fndefs))) tds
+    sDefs <- mapM cgStruct (Prelude.filter isStructDef tds)
+    let cgSymbols = CgSymbols { fSigs = Map.fromList (builtIns ++ fndefs), sTypes = Map.fromList sDefs }
+    mapM (cgFun cgSymbols) (Prelude.filter isFunction tds)
 
 cgBuiltinDefs :: ModuleBuilder [(Ident, Operand)]
 cgBuiltinDefs = mdo
@@ -62,6 +70,30 @@ cgBuiltinDefs = mdo
         , (Ident "calloc", callocPtr)
         ]
 
+isFunction :: TopDef -> Bool
+isFunction FnDef {} = True
+isFunction _ = False
+
+isStructDef :: TopDef -> Bool
+isStructDef StructDef {} = True
+isStructDef _ = False
+
+cgStruct :: TopDef -> ModuleBuilder (Ident, Structure)
+cgStruct (StructDef ident mems) = mdo
+    let sType = StructureType False (map (encodeType . memType) mems)
+    llvmType <- typedef (identToName ident) (Just sType)
+    return (ident, Structure llvmType (Map.fromList (memOffsets mems)))
+    where
+        memType (Member t _) = t
+cgStruct _ = undefined
+memOffsets :: [Mem] -> [(Ident, Operand)]
+memOffsets = memOffsets' 0
+memOffsets' :: Integer -> [Mem] -> [(Ident, Operand)]
+memOffsets' n [] = []
+memOffsets' n ((Member _mType ident):ms) = (ident, offset) : memOffsets' (n+1) ms
+    where
+        offset = ConstantOperand (C.Int 32 n)
+
 pushFnDefs :: [(Ident, FunctionSig)] -> ModuleBuilder [(Ident, Operand)]
 pushFnDefs = mapM pushFnDef
 pushFnDef :: (Ident, FunctionSig) -> ModuleBuilder (Ident, Operand)
@@ -71,8 +103,8 @@ pushFnDef (ident@(Ident str), FunctionSig rType fArgs) = return (ident, fnOpr)
         fnRef = C.GlobalReference fnType (mkName str)
         fnType = FunctionType (encodeType rType) (map encodeType fArgs) False
 
-cgFun :: Map.Map Ident Operand -> TopDef -> ModuleBuilder Operand
-cgFun fsigs (FnDef retType fIdent fnArgs (Block stms)) = mdo
+cgFun :: CgSymbols -> TopDef -> ModuleBuilder Operand
+cgFun symbols (FnDef retType fIdent fnArgs (Block stms)) = mdo
     function
         (identToName fIdent)
         (encodeArgs fnArgs)
@@ -80,12 +112,13 @@ cgFun fsigs (FnDef retType fIdent fnArgs (Block stms)) = mdo
         fnBody
     where
         fnBody o = mdo
-            _unit <- evalRWST (cgFnBody stms fnArgs o) fsigs [Map.empty]
+            _unit <- evalRWST (cgFnBody stms fnArgs o) symbols [Map.empty]
             isTerminated <- hasTerminator
             if isTerminated then
                 return ()
             else mdo
                 unreachable
+cgFun _ _ = undefined
 
 
 
@@ -122,6 +155,9 @@ cgDecl vType (NoInitVar ident) = mdo
       Int -> store vOp 0 (ConstantOperand (C.Int 32 0))
       Doub -> store vOp 0 (ConstantOperand (C.Float (F.Double 0.0)))
       Bool -> store vOp 0 (ConstantOperand (C.Int 1 0))
+      Ptr _ident -> mdo
+        ptr <- inttoptr (ConstantOperand (C.Int 32 0)) (encodeType vType)
+        store vOp 0 ptr
       Array _ -> mdo
         -- Similar logic as in new, but with an array size of zero
         let intSize = C.sizeof (encodeType Int)
@@ -134,7 +170,7 @@ cgDecl vType (NoInitVar ident) = mdo
         lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 (ConstantOperand (C.Int 32 0))
         store vOp 0 arrayPtr
-      _ -> error "Malformed AST! Variable of dissalowed type"
+      t -> error $ "Malformed AST! Variable of dissalowed type " ++ show t
 cgDecl vType (Init ident expr) = mdo
     exprOp <- cgRValue expr
     vOp <- cgDecl' vType ident
@@ -239,7 +275,7 @@ cgStm (For elemType itVarIdent arrExpr stms) = mdo
     itCount <- alloca (encodeType Int) Nothing 0
     store itCount 0 (ConstantOperand (C.Int 32 0))
     -- Get array length
-    arrOp <- cgRValue arrExpr 
+    arrOp <- cgRValue arrExpr
     --arrOp <- load arrPtr 0
     lengthAddr <- gep arrOp [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
     arrayLength <- load lengthAddr 0
@@ -383,7 +419,14 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         lengthPtr <- bitcast lengthAddr (PointerType (encodeType Int) (AddrSpace 0))
         store lengthPtr 0 nElements
         return arrayPtr
-    ENew (NewStruct ident) -> undefined
+    ENew (NewStruct (Ptr ident)) -> mdo
+        (Structure sType _) <- lookupStructure ident
+        let sSize = ConstantOperand(C.sizeof sType)
+        callocPtr <- lookupFunction (Ident "calloc")
+        memPtr <- call callocPtr [(sSize,[]), (ConstantOperand (C.Int 32 1), [])]
+        structPtr <- bitcast memPtr (encodeType eType)
+        return structPtr
+    ENew e -> error $ "Malformed AST, ENew called with invalid arguments: " ++ show e
     EIndex aExpr iExpr -> mdo
         arrPtr <- cgExpr RValue aExpr
         indexOp <- cgExpr RValue iExpr
@@ -395,14 +438,23 @@ cgExpr valueKind (ETyped eType expr) = case expr of
         case valueKind of
           RValue -> load indexAddr 0
           LValue -> return indexAddr
-    EDeref ptrExpr ident -> undefined
+    EDeref ptrExpr ident -> mdo
+        ptr <- cgExpr RValue ptrExpr
+        (Structure _sType sMems) <- lookupStructure (structName ptrExpr)
+        memAddr <- gep ptr
+            [ ConstantOperand (C.Int 32 0)
+            , sMems Map.! ident
+            ]
+        case valueKind of
+          RValue -> load memAddr 0
+          LValue -> return memAddr
 
     ESelect aExpr (Ident "length") -> mdo
         arrPtr <- cgExpr RValue aExpr
         lengthAddr <- gep arrPtr [ConstantOperand (C.Int 32 0), ConstantOperand (C.Int 32 0)]
         load lengthAddr 0
     ESelect _sExpr _ident -> error "Only supports .length for now"
-    ENull (DefType tName) -> undefined
+    ENull (Ptr tName) -> inttoptr (ConstantOperand (C.Int 32 0)) (encodeType (Ptr tName))
     ENull _ -> error "INTERNAL ERROR! ENull of non pointer type"
 
 cgExpr _ (EString str) = mdo
@@ -411,6 +463,10 @@ cgExpr _ (EString str) = mdo
     strptr <- globalStringPtr str strName
     return $ ConstantOperand strptr
 cgExpr _ expr = error $ "Malformed AST! Expected eType, found " ++ show expr
+
+structName :: Expr -> Ident
+structName (ETyped (Ptr ident) _) = ident
+structName _ = error "Not a pointer!!"
 
 encodeFRelOp :: RelOp -> FloatingPointPredicate
 encodeFRelOp op = case op of
@@ -432,10 +488,17 @@ encodeIRelOp op = case op of
 encodeFunOperands :: [Operand] -> [(Operand, [ParameterAttribute])]
 encodeFunOperands = map (\ o -> (o, []))
 
+lookupStructure :: Ident -> CgMonad Structure
+lookupStructure ident = mdo
+    symbols <- ask
+    case Map.lookup ident (sTypes symbols) of
+        Nothing -> error $ "Malformed AST! Undefined JL Struct " ++ show ident
+        Just s -> return s
+
 lookupFunction :: Ident -> CgMonad Operand
 lookupFunction ident = mdo
-    fsigs <- ask
-    case Map.lookup ident fsigs of
+    symbols <- ask
+    case Map.lookup ident (fSigs symbols) of
       Nothing -> error $ "Malformed AST! Undefined JL function" ++ show ident
       Just op -> return op
 
@@ -471,6 +534,8 @@ encodeType Doub = FloatingPointType DoubleFP
 encodeType Bool = IntegerType 1
 encodeType Void = VoidType
 encodeType (Array elemType) = PointerType (StructureType False [IntegerType 32, ArrayType 0 (encodeType elemType)]) (AddrSpace 0)
+encodeType (Ptr sName) = PointerType (NamedTypeReference (identToName sName)) (AddrSpace 0)
+encodeType t@(DefType _) = error $ "DefType not desugared in typechecking!" ++ show t
 encodeType (Fun _retType _args) = error "No function types allowed!" --Should not happen, since we don't have function pointers
 
 encodeArgs :: [Arg] -> [(LLVM.AST.Type, ParameterName)]
